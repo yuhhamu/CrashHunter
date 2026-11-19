@@ -1,0 +1,259 @@
+package dev.crashhunter.core.bisect
+
+import dev.crashhunter.core.analyze.CrashFingerprint
+import dev.crashhunter.core.analyze.StackTraceTools
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.Serializable
+
+@Serializable
+enum class TrialResult { PASS, FAIL, HANG, START_FAILED, CANCELLED }
+
+const val PRISM_UNRESPONSIVE = "prismUnresponsive"
+const val INFERRED = "inferred"
+
+@Serializable
+data class TrialOutcome(
+    val result: TrialResult,
+    val fingerprint: CrashFingerprint? = null,
+    val note: String = "",
+    val crashFile: String? = null,
+)
+
+fun interface TrialRunner {
+    suspend fun run(enabled: Set<String>): TrialOutcome
+}
+
+enum class BisectStatus { FOUND, NO_FAILURE_AT_BASELINE, NOT_A_MOD, START_FAILED, INCONCLUSIVE, CANCELLED, ERROR }
+
+data class BisectResult(
+    val status: BisectStatus,
+    val culprits: List<String> = emptyList(),
+    val requirements: List<String> = emptyList(),
+    val trials: Int = 0,
+    val message: String = "",
+    val otherCrashSeen: Boolean = false,
+)
+
+data class TrialEvent(val number: Int, val estimate: Int, val enabledCount: Int, val outcome: TrialOutcome?, val phase: String, val enabled: Set<String> = emptySet(), val slot: Int = 0, val pool: Int = 0, val focus: List<String> = emptyList())
+
+class BisectEngine(
+    private val candidates: List<String>,
+    private val runner: TrialRunner,
+    private val withRequirements: (Collection<String>) -> Set<String> = { it.toSet() },
+    private val suspects: List<String> = emptyList(),
+    private var target: CrashFingerprint? = null,
+    private val anyCrash: Boolean = false,
+    private val hangIsFailure: Boolean = false,
+    private val repeats: Int = 1,
+    val cache: MutableMap<String, TrialOutcome> = LinkedHashMap(),
+    private val listener: (TrialEvent) -> Unit = {},
+    private val extraRunners: List<TrialRunner> = emptyList(),
+    val knownPass: MutableList<Set<String>> = mutableListOf(),
+) {
+    @Volatile var inferred = 0
+        private set
+
+    init {
+        for ((k, o) in cache) if (o.result == TrialResult.PASS) rememberPass(if (k.isEmpty()) emptySet() else k.split('\u0000').toSet())
+    }
+    private val runners = listOf(runner) + extraRunners
+    val parallel: Int get() = runners.size
+    private var trials = 0
+    private var otherCrash = false
+    private val candidateSet = candidates.toSet()
+    private fun currentEstimate(): Int = if (projected > 0) projected else estimate
+    val estimate: Int get() = 2 + runners.size * (roundsFor(candidates.size) + 1)
+    @Volatile private var started = 0
+    @Volatile var pool: Int = candidates.size
+        private set
+    @Volatile var focus: List<String> = candidates
+        private set
+
+    private fun key(set: Set<String>) = keyOf(set)
+
+    companion object {
+        fun keyOf(set: Collection<String>): String = set.toSortedSet().joinToString("\u0000")
+    }
+
+    private suspend fun runSet(enabled: Set<String>, phase: String): TrialOutcome = runBatch(listOf(enabled), phase).single()
+
+    private suspend fun runOn(slot: Int, enabled: Set<String>, phase: String): TrialOutcome {
+        val r = runners[slot]
+        var outcome: TrialOutcome? = null
+        for (i in 0 until maxOf(1, repeats)) {
+            val n = synchronized(this) { ++started }
+            synchronized(this) { listener(TrialEvent(n, maxOf(currentEstimate(), n), enabled.size, null, phase, enabled, slot, pool, focus)) }
+            var o = r.run(enabled)
+            if (o.result == TrialResult.START_FAILED && o.note == PRISM_UNRESPONSIVE) throw StartFailure(o.note)
+            if (o.result == TrialResult.START_FAILED && phase != "baseline" && phase != "without-mods") {
+                synchronized(this) { listener(TrialEvent(n, maxOf(currentEstimate(), n), enabled.size, null, "retry", enabled, slot, pool)) }
+                o = r.run(enabled)
+                if (o.result == TrialResult.START_FAILED) throw StartFailure(o.note)
+            }
+            val done = synchronized(this) { ++trials }
+            synchronized(this) { listener(TrialEvent(n, maxOf(currentEstimate(), done), enabled.size, o, phase, enabled, slot, pool)) }
+            if (o.result == TrialResult.CANCELLED) throw CancellationException("cancelled")
+            outcome = o
+            if (o.result != TrialResult.PASS) break
+        }
+        return outcome!!
+    }
+
+    private suspend fun runBatch(sets: List<Set<String>>, phase: String): List<TrialOutcome> {
+        for (set in sets) {
+            val k = key(set)
+            if (cache[k] == null && passedBefore(set)) {
+                cache[k] = TrialOutcome(TrialResult.PASS, note = INFERRED)
+                inferred++
+            }
+        }
+        val todo = sets.map { key(it) to it }.filter { (k, _) -> cache[k] == null }.distinctBy { it.first }
+        for (chunk in todo.chunked(runners.size)) {
+            val outs = if (chunk.size == 1) listOf(runOn(0, chunk[0].second, phase)) else coroutineScope {
+                chunk.mapIndexed { i, (_, set) -> async { runOn(i, set, phase) } }.awaitAll()
+            }
+            chunk.forEachIndexed { i, (k, set) ->
+                cache[k] = outs[i]
+                if (outs[i].result == TrialResult.PASS) rememberPass(set)
+            }
+        }
+        return sets.map { cache[key(it)]!! }
+    }
+
+    private fun passedBefore(set: Set<String>): Boolean = synchronized(knownPass) { knownPass.any { it.containsAll(set) } }
+
+    private fun rememberPass(set: Set<String>) = synchronized(knownPass) {
+        if (knownPass.any { it.containsAll(set) }) return@synchronized
+        knownPass.removeAll { set.containsAll(it) }
+        knownPass += set
+    }
+
+    private fun req(subset: Collection<String>): Set<String> = withRequirements(subset).filter { it in candidateSet }.toSet()
+
+    private fun reproduced(o: TrialOutcome): Boolean = when (o.result) {
+        TrialResult.FAIL -> {
+            val t = target
+            val fp = o.fingerprint
+            val same = anyCrash || t == null || fp == null || StackTraceTools.sameFailure(t, fp)
+            if (!same) otherCrash = true
+            same
+        }
+        TrialResult.HANG -> hangIsFailure
+        else -> false
+    }
+
+    private suspend fun fails(subset: Collection<String>, phase: String): Boolean =
+        reproduced(runSet(req(subset), phase))
+
+    private class StartFailure(val note: String) : RuntimeException(note)
+
+    suspend fun run(): BisectResult = try {
+        runInner()
+    } catch (e: StartFailure) {
+        BisectResult(BisectStatus.START_FAILED, trials = trials, message = e.note)
+    } catch (e: CancellationException) {
+        BisectResult(BisectStatus.CANCELLED, trials = trials)
+    }
+
+    private suspend fun runInner(): BisectResult {
+        if (runners.size > 1) runBatch(listOf(candidateSet, emptySet()), "baseline")
+        val base = runSet(candidateSet, "baseline")
+        when (base.result) {
+            TrialResult.PASS -> return BisectResult(BisectStatus.NO_FAILURE_AT_BASELINE, trials = trials)
+            TrialResult.START_FAILED -> return BisectResult(BisectStatus.START_FAILED, trials = trials, message = base.note)
+            TrialResult.HANG -> if (!hangIsFailure) return BisectResult(BisectStatus.INCONCLUSIVE, trials = trials, message = base.note)
+            else -> {}
+        }
+        if (target == null) target = base.fingerprint
+        if (!reproduced(base)) return BisectResult(BisectStatus.NO_FAILURE_AT_BASELINE, trials = trials, message = base.note, otherCrashSeen = true)
+
+        val none = runSet(emptySet(), "without-mods")
+        if (none.result == TrialResult.START_FAILED) return BisectResult(BisectStatus.START_FAILED, trials = trials, message = none.note)
+        if (reproduced(none)) return BisectResult(BisectStatus.NOT_A_MOD, trials = trials)
+
+        val order = dependenciesFirst(suspects.filter { it in candidateSet } + candidates.filter { it !in suspects })
+        val minimal = findCulprits(order, suspects.count { it in candidateSet })
+        pool = minimal.size
+        val confirmed = minimal.isNotEmpty() && fails(minimal, "confirm")
+        if (!confirmed) return BisectResult(BisectStatus.INCONCLUSIVE, minimal, trials = trials, otherCrashSeen = otherCrash,
+            message = "flaky")
+        val req = withRequirements(minimal).filter { it in candidateSet && it !in minimal }
+        return BisectResult(BisectStatus.FOUND, minimal, req, trials, otherCrashSeen = otherCrash)
+    }
+
+    private fun dependenciesFirst(list: List<String>): List<String> {
+        val out = LinkedHashSet<String>()
+        val visiting = HashSet<String>()
+        fun visit(x: String) {
+            if (x in out || !visiting.add(x)) return
+            for (d in req(listOf(x))) if (d != x) visit(d)
+            out += x
+        }
+        list.forEach { visit(it) }
+        return out.toList()
+    }
+
+    @Volatile private var projected = 0
+
+    private fun roundsFor(range: Int): Int {
+        var r = 0
+        var n = range
+        while (n > 1) { n = (n + runners.size) / (runners.size + 1); r++ }
+        return r
+    }
+
+    private fun project(range: Int) {
+        projected = started + runners.size * (roundsFor(range) + 1)
+    }
+
+    private suspend fun findCulprits(order: List<String>, hintCount: Int): List<String> {
+        val found = mutableListOf<String>()
+        var rest = order
+        var lowKnown = 0
+        var first = true
+        while (rest.isNotEmpty()) {
+            val hints = if (first && hintCount > 0) listOf(1, hintCount) else emptyList()
+            val k = prefixSearch(rest, found.toSet(), lowKnown, hints)
+            first = false
+            if (k <= 0) break
+            found += rest[k - 1]
+            rest = rest.subList(0, k - 1)
+            lowKnown = -1
+            if (k == 1) break
+        }
+        return found
+    }
+
+    private suspend fun prefixSearch(rest: List<String>, fixed: Set<String>, lowKnown: Int, hints: List<Int>): Int {
+        var lo = lowKnown
+        var hi = rest.size
+        var extra = (if (lo < 0) listOf(0) else emptyList()) + hints.filter { it in (lo + 1) until hi }
+        extra = extra.distinct().sorted()
+        while (hi - lo > 1) {
+            pool = hi - maxOf(lo, 0)
+            focus = fixed.toList() + rest.subList(maxOf(lo, 0), hi)
+            project(hi - lo)
+            val firstPoints = extra.take(runners.size)
+            extra = emptyList()
+            val free = runners.size - firstPoints.size
+            val evenLo = if (firstPoints.isEmpty()) lo else maxOf(lo, firstPoints.max())
+            val span = hi - evenLo
+            val even = if (free <= 0 || span <= 1) emptyList() else (1..free).map { j -> evenLo + (span.toLong() * j / (free + 1)).toInt() }
+                .map { it.coerceIn(evenLo + 1, hi - 1) }
+            val points = (firstPoints + even).filter { it in (lo + 1) until hi }.distinct().sorted()
+            val sets = points.map { req(fixed + rest.subList(0, maxOf(0, it))) }
+            val outs = runBatch(sets, "search")
+            var newHi = hi
+            var newLo = lo
+            points.forEachIndexed { i, pt -> if (reproduced(outs[i])) { if (pt < newHi) newHi = pt } }
+            points.forEachIndexed { i, pt -> if (!reproduced(outs[i]) && pt < newHi && pt > newLo) newLo = pt }
+            hi = newHi
+            lo = newLo
+        }
+        return hi
+    }
+
+}

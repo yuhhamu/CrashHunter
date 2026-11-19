@@ -1,0 +1,300 @@
+#
+# A fatal error has been detected by the Java Runtime Environment:
+#
+#  SIGSEGV (0xb) at pc=0x00000000000020a6, pid=222, tid=251
+#
+# JRE version: OpenJDK Runtime Environment (17.0.19+10) (build 17.0.19+10-alpine-r0)
+# Java VM: OpenJDK 64-Bit Server VM (17.0.19+10-alpine-r0, mixed mode, sharing, tiered, compressed oops, compressed class ptrs, g1 gc, linux-amd64)
+# Problematic frame:
+# C  [libnative-platform.so+0x3637]  Java_net_rubygrapefruit_platform_internal_jni_PosixProcessFunctions_getPid+0x15
+#
+# Core dump will be written. Default location: Core dumps may be processed with "/wsl-capture-crash %t %E %p %s" (or dumping to /work/MCP-Server/mc-moddev-mcp-server/core.222)
+#
+# If you would like to submit a bug report, please visit:
+#   https://gitlab.alpinelinux.org/alpine/aports/issues
+# The crash happened outside the Java Virtual Machine in native code.
+# See problematic frame for where to report the bug.
+#
+
+---------------  S U M M A R Y ------------
+
+Command Line: --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-opens=java.base/java.nio.charset=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.xml/javax.xml.namespace=ALL-UNNAMED -Xmx2g -Dfile.encoding=UTF-8 -Duser.country=US -Duser.language=en -Duser.variant -javaagent:/work/Tools/Gradle/gradle-8.14.2/lib/agents/gradle-instrumentation-agent-8.14.2.jar org.gradle.launcher.daemon.bootstrap.GradleDaemon 8.14.2
+
+Host: AMD Ryzen 5 5600G with Radeon Graphics, 12 cores, 7G, Alpine Linux v3.24
+Time: Thu Jul 30 12:55:56 2026 UTC elapsed time: 626.629776 seconds (0d 0h 10m 26s)
+
+---------------  T H R E A D  ---------------
+
+Current thread (0x0000710ebf8806e0):  JavaThread "Daemon periodic checks" [_thread_in_native, id=251, stack(0x0000710ebddf9000,0x0000710ebdef9a90)]
+
+Stack: [0x0000710ebddf9000,0x0000710ebdef9a90],  sp=0x0000710ebdef8620,  free space=1021k
+Native frames: (J=compiled Java code, j=interpreted, Vv=VM code, C=native code)
+C  [libnative-platform.so+0x3637]  Java_net_rubygrapefruit_platform_internal_jni_PosixProcessFunctions_getPid+0x15
+j  net.rubygrapefruit.platform.internal.jni.PosixProcessFunctions.getPid()I+0
+j  net.rubygrapefruit.platform.internal.DefaultProcess.getProcessId()I+0
+j  net.rubygrapefruit.platform.internal.WrapperProcess.getProcessId()I+4
+j  org.gradle.internal.nativeintegration.processenvironment.NativePlatformBackedProcessEnvironment.getPid()Ljava/lang/Long;+4
+j  org.gradle.internal.nativeintegration.processenvironment.AbstractProcessEnvironment.maybeGetPid()Ljava/lang/Long;+1
+j  org.gradle.cache.internal.DefaultProcessMetaDataProvider.getProcessIdentifier()Ljava/lang/String;+4
+j  org.gradle.cache.internal.DefaultFileLockManager$DefaultFileLock.lock(Lorg/gradle/cache/FileLockManager$LockMode;)Lorg/gradle/cache/internal/filelock/LockState;+175
+j  org.gradle.cache.internal.DefaultFileLockManager$DefaultFileLock.<init>(Lorg/gradle/cache/internal/DefaultFileLockManager;Ljava/io/File;Lorg/gradle/cache/LockOptions;Ljava/lang/String;Ljava/lang/String;ILjava/util/function/Consumer;)V+192
+j  org.gradle.cache.internal.DefaultFileLockManager.lock(Ljava/io/File;Lorg/gradle/cache/LockOptions;Ljava/lang/String;Ljava/lang/String;Ljava/util/function/Consumer;)Lorg/gradle/cache/FileLock;+115
+j  org.gradle.cache.internal.DefaultFileLockManager.lock(Ljava/io/File;Lorg/gradle/cache/LockOptions;Ljava/lang/String;Ljava/lang/String;)Lorg/gradle/cache/FileLock;+7
+j  org.gradle.cache.internal.DefaultFileLockManager.lock(Ljava/io/File;Lorg/gradle/cache/LockOptions;Ljava/lang/String;)Lorg/gradle/cache/FileLock;+6
+j  org.gradle.cache.internal.OnDemandFileAccess.updateFile(Ljava/lang/Runnable;)V+18
+j  org.gradle.cache.internal.FileBackedObjectHolder.update(Lorg/gradle/cache/ObjectHolder$UpdateAction;)Ljava/lang/Object;+15
+j  org.gradle.cache.internal.FileIntegrityViolationSuppressingObjectHolderDecorator.lambda$update$0(Lorg/gradle/cache/ObjectHolder$UpdateAction;)Ljava/lang/Object;+5
+j  org.gradle.cache.internal.FileIntegrityViolationSuppressingObjectHolderDecorator$$Lambda$99+0x0000710ec510f090.get()Ljava/lang/Object;+8
+j  org.gradle.cache.internal.FileIntegrityViolationSuppressingObjectHolderDecorator.doUpdate(Lorg/gradle/cache/ObjectHolder$UpdateAction;Ljava/util/function/Supplier;)Ljava/lang/Object;+1
+j  org.gradle.cache.internal.FileIntegrityViolationSuppressingObjectHolderDecorator.update(Lorg/gradle/cache/ObjectHolder$UpdateAction;)Ljava/lang/Object;+9
+j  org.gradle.launcher.daemon.registry.PersistentDaemonRegistry.storeStopEvent(Lorg/gradle/launcher/daemon/registry/DaemonStopEvent;)V+42
+j  org.gradle.launcher.daemon.server.DaemonRegistryUpdater.onExpire(Ljava/lang/String;Lorg/gradle/launcher/daemon/server/expiry/DaemonExpirationStatus;)V+45
+j  org.gradle.launcher.daemon.server.Daemon$DefaultDaemonExpirationListener.onExpirationEvent(Lorg/gradle/launcher/daemon/server/expiry/DaemonExpirationResult;)V+28
+j  jdk.internal.reflect.GeneratedMethodAccessor43.invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;+40
+J 11722 c2 org.gradle.internal.event.DefaultListenerManager$ListenerDetails.dispatch(Ljava/lang/Object;)V (9 bytes) @ 0x0000710f165d07bc [0x0000710f165d05e0+0x00000000000001dc]
+J 11517 c2 org.gradle.internal.event.DefaultListenerManager$EventBroadcast$ListenerDispatch.dispatch(Ljava/lang/Object;)V (9 bytes) @ 0x0000710f162266dc [0x0000710f162263c0+0x000000000000031c]
+J 11684 c2 org.gradle.internal.dispatch.ProxyDispatchAdapter$DispatchingInvocationHandler.invoke(Ljava/lang/Object;Ljava/lang/reflect/Method;[Ljava/lang/Object;)Ljava/lang/Object; (184 bytes) @ 0x0000710f16127efc [0x0000710f16127b00+0x00000000000003fc]
+j  jdk.proxy1.$Proxy12.onExpirationEvent(Lorg/gradle/launcher/daemon/server/expiry/DaemonExpirationResult;)V+16 jdk.proxy1
+j  org.gradle.launcher.daemon.server.Daemon$DaemonExpirationPeriodicCheck.run()V+25
+J 11713 c2 org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(Ljava/lang/Runnable;)V (29 bytes) @ 0x0000710f164f4be8 [0x0000710f164f4ba0+0x0000000000000048]
+J 11465 c1 org.gradle.internal.concurrent.AbstractManagedExecutor$1.run()V (57 bytes) @ 0x0000710f0ee1cfac [0x0000710f0ee1ce00+0x00000000000001ac]
+J 11704 c1 java.util.concurrent.Executors$RunnableAdapter.call()Ljava/lang/Object; java.base@17.0.19 (14 bytes) @ 0x0000710f0f66ba4c [0x0000710f0f66b940+0x000000000000010c]
+J 11850 c1 java.util.concurrent.FutureTask.runAndReset()Z java.base@17.0.19 (125 bytes) @ 0x0000710f0f3d40cc [0x0000710f0f3d38e0+0x00000000000007ec]
+J 11716 c1 java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run()V java.base@17.0.19 (57 bytes) @ 0x0000710f0ec1b76c [0x0000710f0ec1b5a0+0x00000000000001cc]
+j  java.util.concurrent.ThreadPoolExecutor.runWorker(Ljava/util/concurrent/ThreadPoolExecutor$Worker;)V+92 java.base@17.0.19
+j  java.util.concurrent.ThreadPoolExecutor$Worker.run()V+5 java.base@17.0.19
+j  java.lang.Thread.run()V+11 java.base@17.0.19
+v  ~StubRoutines::call_stub
+V  [libjvm.so+0x62980a]
+V  [libjvm.so+0x62b1a1]
+V  [libjvm.so+0x704957]
+V  [libjvm.so+0xd0bfee]
+V  [libjvm.so+0xd0fcbe]
+V  [libjvm.so+0xa789f0]
+
+Java frames: (J=compiled Java code, j=interpreted, Vv=VM code)
+j  net.rubygrapefruit.platform.internal.jni.PosixProcessFunctions.getPid()I+0
+j  net.rubygrapefruit.platform.internal.DefaultProcess.getProcessId()I+0
+j  net.rubygrapefruit.platform.internal.WrapperProcess.getProcessId()I+4
+j  org.gradle.internal.nativeintegration.processenvironment.NativePlatformBackedProcessEnvironment.getPid()Ljava/lang/Long;+4
+j  org.gradle.internal.nativeintegration.processenvironment.AbstractProcessEnvironment.maybeGetPid()Ljava/lang/Long;+1
+j  org.gradle.cache.internal.DefaultProcessMetaDataProvider.getProcessIdentifier()Ljava/lang/String;+4
+j  org.gradle.cache.internal.DefaultFileLockManager$DefaultFileLock.lock(Lorg/gradle/cache/FileLockManager$LockMode;)Lorg/gradle/cache/internal/filelock/LockState;+175
+j  org.gradle.cache.internal.DefaultFileLockManager$DefaultFileLock.<init>(Lorg/gradle/cache/internal/DefaultFileLockManager;Ljava/io/File;Lorg/gradle/cache/LockOptions;Ljava/lang/String;Ljava/lang/String;ILjava/util/function/Consumer;)V+192
+j  org.gradle.cache.internal.DefaultFileLockManager.lock(Ljava/io/File;Lorg/gradle/cache/LockOptions;Ljava/lang/String;Ljava/lang/String;Ljava/util/function/Consumer;)Lorg/gradle/cache/FileLock;+115
+j  org.gradle.cache.internal.DefaultFileLockManager.lock(Ljava/io/File;Lorg/gradle/cache/LockOptions;Ljava/lang/String;Ljava/lang/String;)Lorg/gradle/cache/FileLock;+7
+j  org.gradle.cache.internal.DefaultFileLockManager.lock(Ljava/io/File;Lorg/gradle/cache/LockOptions;Ljava/lang/String;)Lorg/gradle/cache/FileLock;+6
+j  org.gradle.cache.internal.OnDemandFileAccess.updateFile(Ljava/lang/Runnable;)V+18
+j  org.gradle.cache.internal.FileBackedObjectHolder.update(Lorg/gradle/cache/ObjectHolder$UpdateAction;)Ljava/lang/Object;+15
+j  org.gradle.cache.internal.FileIntegrityViolationSuppressingObjectHolderDecorator.lambda$update$0(Lorg/gradle/cache/ObjectHolder$UpdateAction;)Ljava/lang/Object;+5
+j  org.gradle.cache.internal.FileIntegrityViolationSuppressingObjectHolderDecorator$$Lambda$99+0x0000710ec510f090.get()Ljava/lang/Object;+8
+j  org.gradle.cache.internal.FileIntegrityViolationSuppressingObjectHolderDecorator.doUpdate(Lorg/gradle/cache/ObjectHolder$UpdateAction;Ljava/util/function/Supplier;)Ljava/lang/Object;+1
+j  org.gradle.cache.internal.FileIntegrityViolationSuppressingObjectHolderDecorator.update(Lorg/gradle/cache/ObjectHolder$UpdateAction;)Ljava/lang/Object;+9
+j  org.gradle.launcher.daemon.registry.PersistentDaemonRegistry.storeStopEvent(Lorg/gradle/launcher/daemon/registry/DaemonStopEvent;)V+42
+j  org.gradle.launcher.daemon.server.DaemonRegistryUpdater.onExpire(Ljava/lang/String;Lorg/gradle/launcher/daemon/server/expiry/DaemonExpirationStatus;)V+45
+j  org.gradle.launcher.daemon.server.Daemon$DefaultDaemonExpirationListener.onExpirationEvent(Lorg/gradle/launcher/daemon/server/expiry/DaemonExpirationResult;)V+28
+j  jdk.internal.reflect.GeneratedMethodAccessor43.invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;+40
+J 11722 c2 org.gradle.internal.event.DefaultListenerManager$ListenerDetails.dispatch(Ljava/lang/Object;)V (9 bytes) @ 0x0000710f165d07bc [0x0000710f165d05e0+0x00000000000001dc]
+J 11517 c2 org.gradle.internal.event.DefaultListenerManager$EventBroadcast$ListenerDispatch.dispatch(Ljava/lang/Object;)V (9 bytes) @ 0x0000710f162266dc [0x0000710f162263c0+0x000000000000031c]
+J 11684 c2 org.gradle.internal.dispatch.ProxyDispatchAdapter$DispatchingInvocationHandler.invoke(Ljava/lang/Object;Ljava/lang/reflect/Method;[Ljava/lang/Object;)Ljava/lang/Object; (184 bytes) @ 0x0000710f16127efc [0x0000710f16127b00+0x00000000000003fc]
+j  jdk.proxy1.$Proxy12.onExpirationEvent(Lorg/gradle/launcher/daemon/server/expiry/DaemonExpirationResult;)V+16 jdk.proxy1
+j  org.gradle.launcher.daemon.server.Daemon$DaemonExpirationPeriodicCheck.run()V+25
+J 11713 c2 org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(Ljava/lang/Runnable;)V (29 bytes) @ 0x0000710f164f4be8 [0x0000710f164f4ba0+0x0000000000000048]
+J 11465 c1 org.gradle.internal.concurrent.AbstractManagedExecutor$1.run()V (57 bytes) @ 0x0000710f0ee1cfac [0x0000710f0ee1ce00+0x00000000000001ac]
+J 11704 c1 java.util.concurrent.Executors$RunnableAdapter.call()Ljava/lang/Object; java.base@17.0.19 (14 bytes) @ 0x0000710f0f66ba4c [0x0000710f0f66b940+0x000000000000010c]
+J 11850 c1 java.util.concurrent.FutureTask.runAndReset()Z java.base@17.0.19 (125 bytes) @ 0x0000710f0f3d40cc [0x0000710f0f3d38e0+0x00000000000007ec]
+J 11716 c1 java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run()V java.base@17.0.19 (57 bytes) @ 0x0000710f0ec1b76c [0x0000710f0ec1b5a0+0x00000000000001cc]
+j  java.util.concurrent.ThreadPoolExecutor.runWorker(Ljava/util/concurrent/ThreadPoolExecutor$Worker;)V+92 java.base@17.0.19
+j  java.util.concurrent.ThreadPoolExecutor$Worker.run()V+5 java.base@17.0.19
+j  java.lang.Thread.run()V+11 java.base@17.0.19
+v  ~StubRoutines::call_stub
+
+siginfo: si_signo: 11 (SIGSEGV), si_code: 1 (SEGV_MAPERR), si_addr: 0x00000000000020a6
+
+Registers:
+RAX=0x0000710ebe966622, RBX=0x0000710ec066b5f0, RCX=0x00000000000000e0, RDX=0x0000710ec066b950
+RSP=0x0000710ebdef8618, RBP=0x0000710ebdef8630, RSI=0x0000710ebdef86a0, RDI=0x0000710ebf880990
+R8 =0x0000000000000011, R9 =0x000000008997e348, R10=0x0000710f15b4458b, R11=0x0000000080feee60
+R12=0x0000000000000000, R13=0x0000710ec066b5f0, R14=0x0000710ebdef86a8, R15=0x0000710ebf8806e0
+RIP=0x00000000000020a6, EFLAGS=0x0000000000010202, CSGSFS=0x002b000000000033, ERR=0x0000000000000014
+  TRAPNO=0x000000000000000e
+
+XMM[0]=0x0000000000000000 0x302b713b7cd45bad
+XMM[1]=0x302b713b7cd45bad 0x2a7352b14eff5ae4
+XMM[2]=0x0000000000000000 0x0000000000000000
+XMM[3]=0x0000000000000000 0x0000000000000000
+XMM[4]=0x0000000000000000 0x00000000302b713b
+XMM[5]=0x0000000000000000 0x000000002a7352b1
+XMM[6]=0x0000000000000000 0x0000710ec5b09170
+XMM[7]=0x727473696765722f 0x322e34312e382f6e
+XMM[8]=0x0000000000000000 0x0000000000000002
+XMM[9]=0x0000000000000000 0x0000710f263f8f6c
+XMM[10]=0x0000000000000000 0x0000710f263f8c20
+XMM[11]=0x0000000000000000 0x0000710f263f8c20
+XMM[12]=0x0000000000000000 0x0000710f263f8f6c
+XMM[13]=0x0000000000000000 0x0000710f263f8f6c
+XMM[14]=0x0000000000000000 0x0000710f263f8f6c
+XMM[15]=0x0000000000000000 0xcafebabecafebabe
+  MXCSR=0x00001fa0
+
+
+Register to memory mapping:
+
+RAX=0x0000710ebe966622: Java_net_rubygrapefruit_platform_internal_jni_PosixProcessFunctions_getPid+0x0000000000000000 in /work/Tools/gradle-user-home-linux/native/1def1411415f61bf3af743bc5b6707747c0891f09f0c88961ee8f79bc544acac/linux-amd64/libnative-platform.so at 0x0000710ebe963000
+RBX={method} {0x0000710ec066b5f0} 'getPid' '()I' in 'net/rubygrapefruit/platform/internal/jni/PosixProcessFunctions'
+RCX=0x00000000000000e0 is an unknown value
+RDX=0x0000710ec066b950 is pointing into metadata
+RSP=0x0000710ebdef8618 is pointing into the stack for thread: 0x0000710ebf8806e0
+RBP=0x0000710ebdef8630 is pointing into the stack for thread: 0x0000710ebf8806e0
+RSI=0x0000710ebdef86a0 is pointing into the stack for thread: 0x0000710ebf8806e0
+RDI=0x0000710ebf880990 points into unknown readable memory: 0x0000710f266a3500 | 00 35 6a 26 0f 71 00 00
+R8 =0x0000000000000011 is an unknown value
+R9 =0x000000008997e348 is an oop: java.io.FileDescriptor 
+{0x000000008997e348} - klass: 'java/io/FileDescriptor'
+ - ---- fields (total size 5 words):
+ - private 'fd' 'I' @12  381 (17d)
+ - private 'handle' 'J' @16  -1 (ffffffff ffffffff)
+ - private 'closed' 'Z' @24  false
+ - private 'append' 'Z' @25  false
+ - private 'parent' 'Ljava/io/Closeable;' @28  a 'java/io/RandomAccessFile'{0x000000008997e318} (8997e318)
+ - private 'otherParents' 'Ljava/util/List;' @32  NULL (0)
+ - private 'cleanup' 'Ljdk/internal/ref/PhantomCleanable;' @36  a 'java/io/FileCleanable'{0x000000008997e370} (8997e370)
+R10=0x0000710f15b4458b is at code_begin+843 in an Interpreter codelet
+method entry point (kind = native)  [0x0000710f15b44240, 0x0000710f15b44aa0]  2144 bytes
+R11=0x0000000080feee60 is an oop: java.lang.Class 
+{0x0000000080feee60} - klass: 'java/lang/Class'
+ - ---- fields (total size 14 words):
+ - private volatile transient 'classRedefinedCount' 'I' @12  0
+ - private volatile transient 'cachedConstructor' 'Ljava/lang/reflect/Constructor;' @40  NULL (0)
+ - private transient 'name' 'Ljava/lang/String;' @44  "net.rubygrapefruit.platform.internal.jni.PosixProcessFunctions"{0x0000000080feeed0} (80feeed0)
+ - private transient 'module' 'Ljava/lang/Module;' @48  a 'java/lang/Module'{0x0000000080622a90} (80622a90)
+ - private final 'classLoader' 'Ljava/lang/ClassLoader;' @52  a 'org/gradle/internal/classloader/VisitableURLClassLoader'{0x00000000806228d0} (806228d0)
+ - private transient 'classData' 'Ljava/lang/Object;' @56  NULL (0)
+ - private transient 'packageName' 'Ljava/lang/String;' @60  "net.rubygrapefruit.platform.internal.jni"{0x0000000080e5f638} (80e5f638)
+ - private final 'componentType' 'Ljava/lang/Class;' @64  NULL (0)
+ - private volatile transient 'reflectionData' 'Ljava/lang/ref/SoftReference;' @68  NULL (0)
+ - private volatile transient 'genericInfo' 'Lsun/reflect/generics/repository/ClassRepository;' @72  NULL (0)
+ - private volatile transient 'enumConstants' '[Ljava/lang/Object;' @76  NULL (0)
+ - private volatile transient 'enumConstantDirectory' 'Ljava/util/Map;' @80  NULL (0)
+ - private volatile transient 'annotationData' 'Ljava/lang/Class$AnnotationData;' @84  NULL (0)
+ - private volatile transient 'annotationType' 'Lsun/reflect/annotation/AnnotationType;' @88  NULL (0)
+ - transient 'classValueMap' 'Ljava/lang/ClassValue$ClassValueMap;' @92  NULL (0)
+ - signature: Lnet/rubygrapefruit/platform/internal/jni/PosixProcessFunctions;
+ - fake entry for mirror: 'net/rubygrapefruit/platform/internal/jni/PosixProcessFunctions'
+ - fake entry for array: NULL
+ - fake entry for oop_size: 14
+ - fake entry for static_oop_field_count: 0
+R12=0x0 is NULL
+R13={method} {0x0000710ec066b5f0} 'getPid' '()I' in 'net/rubygrapefruit/platform/internal/jni/PosixProcessFunctions'
+R14=0x0000710ebdef86a8 is pointing into the stack for thread: 0x0000710ebf8806e0
+R15=0x0000710ebf8806e0 is a thread
+
+
+Top of Stack: (sp=0x0000710ebdef8618)
+0x0000710ebdef8618:   0000710ebe966637 0000710ebdef86a0
+0x0000710ebdef8628:   0000710ebf880990 0000710ebdef8690
+0x0000710ebdef8638:   0000710f15b445ba 0000710ebdef88a0
+0x0000710ebdef8648:   0000710ebdef8648 0000000000000000
+0x0000710ebdef8658:   0000710ebdef86a8 0000710ec066b950
+0x0000710ebdef8668:   0000000000000000 0000000080feee60
+0x0000710ebdef8678:   0000710ec066b5f0 0000000000000000
+0x0000710ebdef8688:   0000710ebdef86b0 0000710ebdef86f8
+0x0000710ebdef8698:   0000710f15b40374 0000000080feee60
+0x0000710ebdef86a8:   0000710f15b41ff6 0000710ebdef86b0
+0x0000710ebdef86b8:   0000710ec065b958 0000710ebdef8708
+0x0000710ebdef86c8:   0000710ec065beb8 0000000000000000
+0x0000710ebdef86d8:   0000000080ff4820 0000710ec065b978
+0x0000710ebdef86e8:   0000710ebdef86b0 0000710ebdef8708
+0x0000710ebdef86f8:   0000710ebdef8758 0000710f15b407fa
+0x0000710ebdef8708:   0000000080947570 0000710ebdef8710
+0x0000710ebdef8718:   0000710ec065a714 0000710ebdef8768
+0x0000710ebdef8728:   0000710ec065b010 0000000000000000
+0x0000710ebdef8738:   0000000080ff48f0 0000710ec065a730
+0x0000710ebdef8748:   0000710ebdef8708 0000710ebdef8768
+0x0000710ebdef8758:   0000710ebdef87b8 0000710f15b407fa
+0x0000710ebdef8768:   0000000080947548 0000710ebdef8770
+0x0000710ebdef8778:   0000710ec065c7fc 0000710ebdef87c8
+0x0000710ebdef8788:   0000710ec065ddf8 0000000000000000
+0x0000710ebdef8798:   0000000080ff4638 0000710ec065c818
+0x0000710ebdef87a8:   0000710ebdef8768 0000710ebdef87c8
+0x0000710ebdef87b8:   0000710ebdef8818 0000710f15b403b9
+0x0000710ebdef87c8:   000000008091f100 0000710ebdef87d0
+0x0000710ebdef87d8:   0000710ec065d901 0000710ebdef8828
+0x0000710ebdef87e8:   0000710ec065da60 0000000000000000
+0x0000710ebdef87f8:   0000000080ff4730 0000710ec065d918
+0x0000710ebdef8808:   0000710ebdef87c8 0000710ebdef8828 
+
+Instructions: (pc=0x0000710ebe966637)
+0x0000710ebe966537:   00 48 89 c7 e8 50 ed ff ff b8 00 00 00 00 e9 c2
+0x0000710ebe966547:   00 00 00 48 8b 45 90 48 89 c2 48 8b 8d 50 ff ff
+0x0000710ebe966557:   ff 48 8b 85 48 ff ff ff 48 89 ce 48 89 c7 e8 16
+0x0000710ebe966567:   eb ff ff 89 85 44 ff ff ff 48 8b 85 48 ff ff ff
+0x0000710ebe966577:   48 89 c7 e8 41 ea ff ff 83 bd 44 ff ff ff 00 79
+0x0000710ebe966587:   33 48 8b 85 50 ff ff ff 48 89 c7 e8 29 ea ff ff
+0x0000710ebe966597:   48 8b 95 20 ff ff ff 48 8b 85 38 ff ff ff 48 8d
+0x0000710ebe9665a7:   35 7e 10 00 00 48 89 c7 e8 5c ec ff ff b8 00 00
+0x0000710ebe9665b7:   00 00 eb 51 48 8b 45 90 48 89 c2 48 8b 85 50 ff
+0x0000710ebe9665c7:   ff ff 48 01 d0 c6 00 00 48 8b 95 20 ff ff ff 48
+0x0000710ebe9665d7:   8b 8d 50 ff ff ff 48 8b 85 38 ff ff ff 48 89 ce
+0x0000710ebe9665e7:   48 89 c7 e8 61 ed ff ff 48 89 85 58 ff ff ff 48
+0x0000710ebe9665f7:   8b 85 50 ff ff ff 48 89 c7 e8 bb e9 ff ff 48 8b
+0x0000710ebe966607:   85 58 ff ff ff 48 8b 4d f8 64 48 33 0c 25 28 00
+0x0000710ebe966617:   00 00 74 05 e8 e0 ea ff ff c9 c3 55 48 89 e5 48
+0x0000710ebe966627:   83 ec 10 48 89 7d f8 48 89 75 f0 e8 69 ea ff ff
+0x0000710ebe966637:   c9 c3 55 48 89 e5 48 83 ec 20 48 89 7d f8 48 89
+0x0000710ebe966647:   75 f0 48 89 55 e8 e8 7e eb ff ff 83 f8 ff 0f 94
+0x0000710ebe966657:   c0 84 c0 74 23 e8 7f e9 ff ff 8b 00 83 f8 01 74
+0x0000710ebe966667:   17 48 8b 55 e8 48 8b 45 f8 48 8d 35 c6 0f 00 00
+0x0000710ebe966677:   48 89 c7 e8 91 eb ff ff 90 c9 c3 55 48 89 e5 48
+0x0000710ebe966687:   83 ec 30 48 89 7d e8 48 89 75 e0 48 89 55 d8 be
+0x0000710ebe966697:   00 00 00 00 bf 00 00 00 00 e8 0b eb ff ff 48 89
+0x0000710ebe9666a7:   45 f0 48 83 7d f0 00 75 1e 48 8b 55 d8 48 8b 45
+0x0000710ebe9666b7:   e8 48 8d 35 91 0f 00 00 48 89 c7 e8 49 eb ff ff
+0x0000710ebe9666c7:   b8 00 00 00 00 eb 2b 48 8b 55 d8 48 8b 4d f0 48
+0x0000710ebe9666d7:   8b 45 e8 48 89 ce 48 89 c7 e8 6b ec ff ff 48 89
+0x0000710ebe9666e7:   45 f8 48 8b 45 f0 48 89 c7 e8 cb e8 ff ff 48 8b
+0x0000710ebe9666f7:   45 f8 c9 c3 55 48 89 e5 48 83 ec 30 48 89 7d e8
+0x0000710ebe966707:   48 89 75 e0 48 89 55 d8 48 89 4d d0 48 8b 55 d0
+0x0000710ebe966717:   48 8b 4d d8 48 8b 45 e8 48 89 ce 48 89 c7 e8 16
+0x0000710ebe966727:   eb ff ff 48 89 45 f8 48 83 7d f8 00 74 3a 48 8b 
+
+
+Stack slot to memory mapping:
+stack at sp + 0 slots: 0x0000710ebdef86a0 is pointing into the stack for thread: 0x0000710ebf8806e0
+stack at sp + 1 slots: 0x0000710ebf880990 points into unknown readable memory: 0x0000710f266a3500 | 00 35 6a 26 0f 71 00 00
+stack at sp + 2 slots: 0x0000710ebdef8690 is pointing into the stack for thread: 0x0000710ebf8806e0
+stack at sp + 3 slots: 0x0000710f15b445ba is at code_begin+890 in an Interpreter codelet
+method entry point (kind = native)  [0x0000710f15b44240, 0x0000710f15b44aa0]  2144 bytes
+stack at sp + 4 slots: 0x0000710ebdef88a0 is pointing into the stack for thread: 0x0000710ebf8806e0
+stack at sp + 5 slots: 0x0000710ebdef8648 is pointing into the stack for thread: 0x0000710ebf8806e0
+stack at sp + 6 slots: 0x0 is NULL
+stack at sp + 7 slots: 0x0000710ebdef86a8 is pointing into the stack for thread: 0x0000710ebf8806e0
+
+
+Compiled method (c2) 628373 11722       4       org.gradle.internal.event.DefaultListenerManager$ListenerDetails::dispatch (9 bytes)
+ total in heap  [0x0000710f165d0390,0x0000710f165d1a80] = 5872
+ relocation     [0x0000710f165d04f0,0x0000710f165d05d8] = 232
+ main code      [0x0000710f165d05e0,0x0000710f165d1240] = 3168
+ stub code      [0x0000710f165d1240,0x0000710f165d12c0] = 128
+ oops           [0x0000710f165d12c0,0x0000710f165d12d0] = 16
+ metadata       [0x0000710f165d12d0,0x0000710f165d1408] = 312
+ scopes data    [0x0000710f165d1408,0x0000710f165d1708] = 768
+ scopes pcs     [0x0000710f165d1708,0x0000710f165d1938] = 560
+ dependencies   [0x0000710f165d1938,0x0000710f165d1968] = 48
+ handler table  [0x0000710f165d1968,0x0000710f165d1a40] = 216
+ nul chk table  [0x0000710f165d1a40,0x0000710f165d1a80] = 64
+
+[Constant Pool (empty)]
+
+[MachCode]
+[Entry Point]
+  # {method} {0x0000710ec079eb98} 'dispatch' '(Ljava/lang/Object;)V' in 'org/gradle/internal/event/DefaultListenerManager$ListenerDetails'
+  # this:     rsi:rsi   = 'org/gradle/internal/event/DefaultListenerManager$ListenerDetails'
+  # parm0:    rdx:rdx   = 'java/lang/Object'
+  #           [sp+0x60]  (sp of caller)
+  0x0000710f165d05e0: 448b 5608 | 49bb 0000 | 00c4 0e71 | 0000 4d03 | d349 3bc2 
+
+  0x0000710f165d05f4: ;   {runtime_call ic_miss_stub}
+  0x0000710f165d05f4: 0f85 8677 | 5bff 6690 | 0f1f 4000 
+[Verified Entry Point]
+  0x0000710f165d0600: 8984 2400 | c0fe ff55 | 4883 ec50 | 4889 7424 | 0844 8b52 

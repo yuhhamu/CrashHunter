@@ -1,0 +1,50 @@
+name: 不具合の報告 / Bug report
+description: CrashHunter が正しく動かないとき / When CrashHunter does not work correctly
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ゲームのクラッシュそのものではなく、CrashHunter の不具合を報告する場所です。ユーザー名やフォルダのパスが含まれないように注意してください。
+        This is for problems with CrashHunter itself, not for game crashes. Please remove user names and folder paths.
+  - type: input
+    id: version
+    attributes:
+      label: CrashHunter のバージョン / Version
+      description: 設定 →「CrashHunter について」/ Settings > About CrashHunter
+      placeholder: "1.2.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: feature
+    attributes:
+      label: 機能 / Feature
+      options: [診断 / Diagnose, 自動修正 / Auto-fix, 二分探査 / Bisect, 構成調整 / Tune Mods, CrashHunter Database, 設定・その他 / Settings, other]
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: 環境 / Environment
+      description: Windows のバージョン、Prism Launcher のバージョン、Minecraft とローダーのバージョン
+      placeholder: "Windows 11, Prism 9.x, Minecraft 1.20.1 Forge 47.4.x"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 起きたこと / What happened
+      description: 何をしたら、どうなったか。期待した動きも書いてください / Steps, result and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: 診断結果のコピー / Copied result
+      description: 診断画面の「結果をコピー」で貼り付けられる内容(ユーザー名とパスは伏せられます)/ Use the Copy button on the result (names and paths are masked)
+      render: text
+  - type: textarea
+    id: logs
+    attributes:
+      label: CrashHunter のログ / Logs
+      description: "%APPDATA%\\CrashHunter\\logs の該当する時刻のファイルを添付してください / Attach files from %APPDATA%\\CrashHunter\\logs"

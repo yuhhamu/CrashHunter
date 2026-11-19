@@ -1,0 +1,16 @@
+{
+  "strong": [
+    "\\[modloomsupport\\] state booting -> menu",
+    "\\[crashhunter-probe\\] menu",
+    "Realms Notification Availability checker",
+    "\\[ModernFix/\\]: Game took [\\d.]+ seconds to start"
+  ],
+  "weak": [
+    "Created: \\d+x\\d+x\\d+ minecraft:textures/atlas/mob_effects\\.png-atlas",
+    "Forge Mod Loader has successfully loaded \\d+ mods?",
+    "Sound engine started"
+  ],
+  "strongSettleSec": 10,
+  "weakSettleSec": 45,
+  "quietSec": 8
+}

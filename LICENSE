@@ -1,0 +1,41 @@
+﻿# CrashHunter ライセンス
+
+Copyright (c) 2026 yuhhamu. All rights reserved.
+
+CrashHunter の著作権は yuhhamu が持ちます。利用条件は[利用規約](https://github.com/yuhhamu/CrashHunter/blob/main/docs/terms.md)(アプリの「設定」→「CrashHunter について」→「利用規約」)のとおりです。
+
+## 許可すること
+
+- 個人・営利を問わず、無料で使うこと
+- ソースコードを読むこと、学習のために参考にすること
+- 不具合の報告、紹介記事・動画・スクリーンショットでの紹介
+
+## 禁止すること(作者が個別に許可した場合を除く)
+
+- 改変、改変したものの作成と配布
+- 作者が指定した配布元([GitHub](https://github.com/yuhhamu/CrashHunter))以外での再配布やミラー
+- CrashHunter の名前やアイコンを使って別のものを配ること
+
+同梱しているほかのソフトウェアは、それぞれのライセンスに従います([NOTICE.md](https://github.com/yuhhamu/CrashHunter/blob/main/NOTICE.md))。
+
+---
+
+# CrashHunter License
+
+Copyright (c) 2026 yuhhamu. All rights reserved.
+
+CrashHunter is copyright yuhhamu. The [terms of use](https://github.com/yuhhamu/CrashHunter/blob/main/docs/terms.md) (Settings > About CrashHunter > Terms of Use in the app) apply.
+
+## You may
+
+- use it free of charge, for personal or commercial purposes
+- read the source code and learn from it
+- report bugs, and introduce it in articles, videos and screenshots
+
+## You may not, unless the author gives separate permission
+
+- modify it, or make or distribute modified versions
+- redistribute or mirror it anywhere other than the official source ([GitHub](https://github.com/yuhhamu/CrashHunter))
+- distribute anything else under the CrashHunter name or icon
+
+Bundled third-party software is covered by its own licenses ([NOTICE.md](https://github.com/yuhhamu/CrashHunter/blob/main/NOTICE.md)).

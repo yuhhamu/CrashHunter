@@ -1,0 +1,188 @@
+---- Minecraft Crash Report ----
+// My bad.
+
+Time: 2026-11-09 01:44:14
+Description: Ticking block entity
+
+java.lang.IllegalArgumentException: amount must be positive: 0
+	at com.example.fourfoldfactory.node.ResourceAmount.<init>(ResourceAmount.java:10) ~[%23196!/:?] {re:classloading}
+	at com.example.fourfoldfactory.block.entity.HypercubeControllerBlockEntity.writeMonitorLists(HypercubeControllerBlockEntity.java:2011) ~[%23196!/:?] {re:classloading}
+	at com.example.fourfoldfactory.block.entity.HypercubeControllerBlockEntity.buildMonitorTag(HypercubeControllerBlockEntity.java:1977) ~[%23196!/:?] {re:classloading}
+	at com.example.fourfoldfactory.block.entity.HypercubeControllerBlockEntity.updateMonitors(HypercubeControllerBlockEntity.java:2026) ~[%23196!/:?] {re:classloading}
+	at com.example.fourfoldfactory.block.entity.HypercubeControllerBlockEntity.tick(HypercubeControllerBlockEntity.java:1373) ~[%23196!/:?] {re:classloading}
+	at com.example.fourfoldfactory.block.entity.HypercubeControllerBlockEntity.serverTick(HypercubeControllerBlockEntity.java:1357) ~[%23196!/:?] {re:classloading}
+	at net.minecraft.world.level.chunk.LevelChunk$BoundTickingBlockEntity.tick(LevelChunk.java:689) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:classloading}
+	at net.minecraft.world.level.chunk.LevelChunk$RebindableTickingBlockEntityWrapper.tick(LevelChunk.java:782) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:classloading}
+	at net.minecraft.world.level.Level.redirect$zzp000$observable$redirectTick(Level.java:1040) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:observable.common.json:LevelMixin,pl:mixin:A}
+	at net.minecraft.world.level.Level.tickBlockEntities(Level.java:468) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:observable.common.json:LevelMixin,pl:mixin:A}
+	at net.minecraft.server.level.ServerLevel.tick(ServerLevel.java:351) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:observable.common.json:ServerLevelMixin,pl:mixin:A}
+	at net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:893) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:ae2.mixins.json:spatial.MinecraftServerMixin,pl:mixin:A}
+	at net.minecraft.server.dedicated.DedicatedServer.tickChildren(DedicatedServer.java:283) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:classloading,pl:accesstransformer:B}
+	at net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:814) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:ae2.mixins.json:spatial.MinecraftServerMixin,pl:mixin:A}
+	at net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:661) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:ae2.mixins.json:spatial.MinecraftServerMixin,pl:mixin:A}
+	at net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:251) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:ae2.mixins.json:spatial.MinecraftServerMixin,pl:mixin:A}
+	at java.lang.Thread.run(Thread.java:840) ~[?:?] {re:mixin}
+
+
+A detailed walkthrough of the error, its code path and all known details is as follows:
+---------------------------------------------------------------------------------------
+
+-- Head --
+Thread: Server thread
+Suspected Mods: 
+	Fourfold Factory (fourfoldfactory), Version: 0.1.0
+		at TRANSFORMER/fourfoldfactory@0.1.0/com.example.fourfoldfactory.node.ResourceAmount.<init>(ResourceAmount.java:10)
+
+	Observable (observable), Version: 4.4.2
+		Issue tracker URL: https://github.com/tasgon/observable/issues
+		Mixin class: observable.mixin.LevelMixin
+		Target: net.minecraft.world.level.Level
+		at TRANSFORMER/minecraft@1.20.1/net.minecraft.world.level.Level.redirect$zzp000$observable$redirectTick(Level.java:1040)
+Stacktrace:
+	at com.example.fourfoldfactory.node.ResourceAmount.<init>(ResourceAmount.java:10) ~[%23196!/:?] {re:classloading}
+	at com.example.fourfoldfactory.block.entity.HypercubeControllerBlockEntity.writeMonitorLists(HypercubeControllerBlockEntity.java:2011) ~[%23196!/:?] {re:classloading}
+	at com.example.fourfoldfactory.block.entity.HypercubeControllerBlockEntity.buildMonitorTag(HypercubeControllerBlockEntity.java:1977) ~[%23196!/:?] {re:classloading}
+	at com.example.fourfoldfactory.block.entity.HypercubeControllerBlockEntity.updateMonitors(HypercubeControllerBlockEntity.java:2026) ~[%23196!/:?] {re:classloading}
+	at com.example.fourfoldfactory.block.entity.HypercubeControllerBlockEntity.tick(HypercubeControllerBlockEntity.java:1373) ~[%23196!/:?] {re:classloading}
+	at com.example.fourfoldfactory.block.entity.HypercubeControllerBlockEntity.serverTick(HypercubeControllerBlockEntity.java:1357) ~[%23196!/:?] {re:classloading}
+	at net.minecraft.world.level.chunk.LevelChunk$BoundTickingBlockEntity.tick(LevelChunk.java:689) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:classloading}
+	at net.minecraft.world.level.chunk.LevelChunk$RebindableTickingBlockEntityWrapper.tick(LevelChunk.java:782) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:classloading}
+	at net.minecraft.world.level.Level.redirect$zzp000$observable$redirectTick(Level.java:1040) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:observable.common.json:LevelMixin,pl:mixin:A}
+	at net.minecraft.world.level.Level.tickBlockEntities(Level.java:468) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:observable.common.json:LevelMixin,pl:mixin:A}
+	at net.minecraft.server.level.ServerLevel.tick(ServerLevel.java:351) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:observable.common.json:ServerLevelMixin,pl:mixin:A}
+-- Block entity being ticked --
+Details:
+	Name: fourfoldfactory:hypercube_controller // com.example.fourfoldfactory.block.entity.HypercubeControllerBlockEntity
+	Block: Block{fourfoldfactory:hypercube_controller}[facing=west,formed=true]
+	Block location: World: (568,102,488), Section: (at 8,6,8 in 35,6,30; chunk contains blocks 560,-64,480 to 575,319,495), Region: (1,0; contains chunks 32,0 to 63,31, blocks 512,-64,0 to 1023,319,511)
+	Block: Block{fourfoldfactory:hypercube_controller}[facing=west,formed=true]
+	Block location: World: (568,102,488), Section: (at 8,6,8 in 35,6,30; chunk contains blocks 560,-64,480 to 575,319,495), Region: (1,0; contains chunks 32,0 to 63,31, blocks 512,-64,0 to 1023,319,511)
+Stacktrace:
+	at net.minecraft.world.level.chunk.LevelChunk$BoundTickingBlockEntity.tick(LevelChunk.java:689) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:classloading}
+	at net.minecraft.world.level.chunk.LevelChunk$RebindableTickingBlockEntityWrapper.tick(LevelChunk.java:782) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:classloading}
+	at net.minecraft.world.level.Level.redirect$zzp000$observable$redirectTick(Level.java:1040) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:observable.common.json:LevelMixin,pl:mixin:A}
+	at net.minecraft.world.level.Level.tickBlockEntities(Level.java:468) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:observable.common.json:LevelMixin,pl:mixin:A}
+	at net.minecraft.server.level.ServerLevel.tick(ServerLevel.java:351) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:observable.common.json:ServerLevelMixin,pl:mixin:A}
+	at net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:893) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:ae2.mixins.json:spatial.MinecraftServerMixin,pl:mixin:A}
+	at net.minecraft.server.dedicated.DedicatedServer.tickChildren(DedicatedServer.java:283) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:classloading,pl:accesstransformer:B}
+	at net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:814) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:ae2.mixins.json:spatial.MinecraftServerMixin,pl:mixin:A}
+	at net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:661) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:ae2.mixins.json:spatial.MinecraftServerMixin,pl:mixin:A}
+	at net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:251) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:ae2.mixins.json:spatial.MinecraftServerMixin,pl:mixin:A}
+	at java.lang.Thread.run(Thread.java:840) ~[?:?] {re:mixin}
+
+
+-- Affected level --
+Details:
+	All players: 0 total; []
+	Chunk stats: 3282
+	Level dimension: minecraft:overworld
+	Level spawn location: World: (561,100,491), Section: (at 1,4,11 in 35,6,30; chunk contains blocks 560,-64,480 to 575,319,495), Region: (1,0; contains chunks 32,0 to 63,31, blocks 512,-64,0 to 1023,319,511)
+	Level time: 8072697 game time, 3129669 day time
+	Level name: world
+	Level game mode: Game mode: creative (ID 1). Hardcore: false. Cheats: false
+	Level weather: Rain time: 18215 (now: true), thunder time: 2427 (now: true)
+	Known server brands: forge
+	Removed feature flags: 
+	Level was modded: true
+	Level storage version: 0x04ABD - Anvil
+Stacktrace:
+	at net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:893) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:ae2.mixins.json:spatial.MinecraftServerMixin,pl:mixin:A}
+	at net.minecraft.server.dedicated.DedicatedServer.tickChildren(DedicatedServer.java:283) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:classloading,pl:accesstransformer:B}
+	at net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:814) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:ae2.mixins.json:spatial.MinecraftServerMixin,pl:mixin:A}
+	at net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:661) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:ae2.mixins.json:spatial.MinecraftServerMixin,pl:mixin:A}
+	at net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:251) ~[forge-1.20.1-47.4.6_mapped_official_1.20.1.jar%23191!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:ae2.mixins.json:spatial.MinecraftServerMixin,pl:mixin:A}
+	at java.lang.Thread.run(Thread.java:840) ~[?:?] {re:mixin}
+
+
+-- System Details --
+Details:
+	Minecraft Version: 1.20.1
+	Minecraft Version ID: 1.20.1
+	Operating System: Windows 11 (amd64) version 10.0
+	Java Version: 17.0.19, Eclipse Adoptium
+	Java VM Version: OpenJDK 64-Bit Server VM (mixed mode, sharing), Eclipse Adoptium
+	Memory: 869884528 bytes (829 MiB) / 2147483648 bytes (2048 MiB) up to 2147483648 bytes (2048 MiB)
+	CPUs: 12
+	Processor Vendor: AuthenticAMD
+	Processor Name: AMD Ryzen 5 5600G with Radeon Graphics         
+	Identifier: AuthenticAMD Family 25 Model 80 Stepping 0
+	Microarchitecture: Zen 3
+	Frequency (GHz): 3.89
+	Number of physical packages: 1
+	Number of physical CPUs: 6
+	Number of logical CPUs: 12
+	Graphics card #0 name: NVIDIA GeForce RTX 3060
+	Graphics card #0 vendor: NVIDIA (0x10de)
+	Graphics card #0 VRAM (MB): 4095.00
+	Graphics card #0 deviceId: 0x2503
+	Graphics card #0 versionInfo: DriverVersion=32.0.16.1088
+	Graphics card #1 name: NVIDIA GeForce RTX 3050
+	Graphics card #1 vendor: NVIDIA (0x10de)
+	Graphics card #1 VRAM (MB): 4095.00
+	Graphics card #1 deviceId: 0x2584
+	Graphics card #1 versionInfo: DriverVersion=32.0.16.1088
+	Memory slot #0 capacity (MB): 8192.00
+	Memory slot #0 clockSpeed (GHz): 2.67
+	Memory slot #0 type: DDR4
+	Memory slot #1 capacity (MB): 8192.00
+	Memory slot #1 clockSpeed (GHz): 2.67
+	Memory slot #1 type: DDR4
+	Memory slot #2 capacity (MB): 16384.00
+	Memory slot #2 clockSpeed (GHz): 2.67
+	Memory slot #2 type: DDR4
+	Memory slot #3 capacity (MB): 16384.00
+	Memory slot #3 clockSpeed (GHz): 2.67
+	Memory slot #3 type: DDR4
+	Virtual memory max (MB): 81023.34
+	Virtual memory used (MB): 53156.49
+	Swap memory total (MB): 32000.00
+	Swap memory used (MB): 363.79
+	JVM Flags: 2 total; -Xms2048M -Xmx2048M
+	Server Running: true
+	Player Count: 0 / 20; []
+	Data Packs: vanilla, mod:forge, mod:emi (incompatible), mod:jei, mod:mekanism, mod:jade (incompatible), mod:kotlinforforge (incompatible), mod:architectury (incompatible), mod:observable (incompatible), mod:hostilenetworks (incompatible), mod:cucumber, mod:extendedcrafting, mod:placebo (incompatible), mod:guideme (incompatible), mod:ae2 (incompatible), mod:mekanismgenerators, mod:refinedstorage, mod:fourfoldfactory
+	Enabled Feature Flags: minecraft:vanilla
+	World Generation: Stable
+	Is Modded: Definitely; Server brand changed to 'forge'
+	Type: Dedicated Server (map_server.txt)
+	ModLauncher: 10.0.9+10.0.9+main.dcd20f30
+	ModLauncher launch target: forgeserveruserdev
+	ModLauncher naming: mcp
+	ModLauncher services: 
+		mixin-0.8.5.jar mixin PLUGINSERVICE 
+		eventbus-6.0.5.jar eventbus PLUGINSERVICE 
+		fmlloader-1.20.1-47.4.6.jar slf4jfixer PLUGINSERVICE 
+		fmlloader-1.20.1-47.4.6.jar object_holder_definalize PLUGINSERVICE 
+		fmlloader-1.20.1-47.4.6.jar runtime_enum_extender PLUGINSERVICE 
+		fmlloader-1.20.1-47.4.6.jar capability_token_subclass PLUGINSERVICE 
+		accesstransformers-8.0.4.jar accesstransformer PLUGINSERVICE 
+		fmlloader-1.20.1-47.4.6.jar runtimedistcleaner PLUGINSERVICE 
+		modlauncher-10.0.9.jar mixin TRANSFORMATIONSERVICE 
+		modlauncher-10.0.9.jar fml TRANSFORMATIONSERVICE 
+	FML Language Providers: 
+		minecraft@1.0
+		javafml@null
+		kotlinforforge@4.11.0
+		lowcodefml@null
+	Mod List: 
+		emi-forge-1.1.24+1.20.1_mapped_official_1.20.1.jar|EMI                           |emi                           |1.1.24+1.20.1+forge |DONE      |Manifest: NOSIGNATURE
+		forge-1.20.1-47.4.6_mapped_official_1.20.1.jar    |Minecraft                     |minecraft                     |1.20.1              |DONE      |Manifest: a1:d4:5e:04:4f:d3:d6:e0:7b:37:97:cf:77:b0:de:ad:4a:47:ce:8c:96:49:5f:0a:cf:8c:ae:b2:6d:4b:8a:3f
+		hostile-neural-networks-6ByGTKSc_mapped_official_1|Hostile Neural Networks       |hostilenetworks               |5.3.3               |DONE      |Manifest: NOSIGNATURE
+		cucumber-xnLznSfT_mapped_official_1.20.1.jar      |Cucumber Library              |cucumber                      |7.0.16              |DONE      |Manifest: NOSIGNATURE
+		jade-11.13.3+forge_mapped_official_1.20.1.jar     |Jade                          |jade                          |11.13.3+forge       |DONE      |Manifest: NOSIGNATURE
+		guideme-i7Tp1AHw_mapped_official_1.20.1.jar       |GuideME                       |guideme                       |20.1.15             |DONE      |Manifest: NOSIGNATURE
+		architectury-api-9.2.14+forge_mapped_official_1.20|Architectury                  |architectury                  |9.2.14              |DONE      |Manifest: NOSIGNATURE
+		jei-1.20.1-forge-15.20.0.134_mapped_official_1.20.|Just Enough Items             |jei                           |15.20.0.134         |DONE      |Manifest: NOSIGNATURE
+		ae2-QRpVsqDI_mapped_official_1.20.1.jar           |Applied Energistics 2         |ae2                           |15.4.12             |DONE      |Manifest: NOSIGNATURE
+		extended-crafting-NtEZsGjO_mapped_official_1.20.1.|Extended Crafting             |extendedcrafting              |6.0.10              |DONE      |Manifest: NOSIGNATURE
+		mekanism-10.4.16.80_mapped_official_1.20.1.jar    |Mekanism                      |mekanism                      |10.4.16             |DONE      |Manifest: NOSIGNATURE
+		main                                              |Fourfold Factory              |fourfoldfactory               |0.1.0               |DONE      |Manifest: NOSIGNATURE
+		mekanism-generators-Th4Czz4N_mapped_official_1.20.|Mekanism: Generators          |mekanismgenerators            |10.4.16             |DONE      |Manifest: NOSIGNATURE
+		kffmod-4.11.0.jar                                 |Kotlin For Forge              |kotlinforforge                |4.11.0              |DONE      |Manifest: NOSIGNATURE
+		                                                  |Forge                         |forge                         |47.4.6              |DONE      |Manifest: NOSIGNATURE
+		observable-4.4.2+forge_mapped_official_1.20.1.jar |Observable                    |observable                    |4.4.2               |DONE      |Manifest: NOSIGNATURE
+		refined-storage-ZITLFjjf_mapped_official_1.20.1.ja|Refined Storage               |refinedstorage                |1.12.4              |DONE      |Manifest: NOSIGNATURE
+		placebo-6SkuAGoz_mapped_official_1.20.1.jar       |Placebo                       |placebo                       |8.6.3               |DONE      |Manifest: NOSIGNATURE
+	Crash Report UUID: 20438835-0d38-429f-a1f1-d6683e68e400
+	FML: 47.4
+	Forge: net.minecraftforge:47.4.6

@@ -1,0 +1,514 @@
+{
+  "MISSING_DEPENDENCY": {
+    "title": {
+      "ja": "前提Modが入っていない",
+      "en": "A required mod is missing"
+    },
+    "detail": {
+      "ja": "{mod} の動作には {other} {required} が必要ですが、見つかりません。",
+      "en": "{mod} needs {other} {required}, but it is not installed."
+    },
+    "solutions": [
+      {
+        "ja": "{other} {required} をインストールする",
+        "en": "Install {other} {required}"
+      },
+      {
+        "ja": "{mod} を外す",
+        "en": "Remove {mod}"
+      }
+    ]
+  },
+  "DEPENDENCY_VERSION": {
+    "title": {
+      "ja": "前提Modのバージョンが対応していない",
+      "en": "A required mod has the wrong version"
+    },
+    "detail": {
+      "ja": "{mod} は {other} {required} を必要としますが、入っているのは {actual} です。",
+      "en": "{mod} needs {other} {required}, but {actual} is installed."
+    },
+    "solutions": [
+      {
+        "ja": "{other} を更新する({required})",
+        "en": "Update {other} ({required})"
+      },
+      {
+        "ja": "{mod} を {other} {actual} に対応したバージョンへ変える",
+        "en": "Switch {mod} to a version made for {other} {actual}"
+      }
+    ]
+  },
+  "LOADER_VERSION": {
+    "title": {
+      "ja": "Modローダーが古い",
+      "en": "The mod loader is too old"
+    },
+    "detail": {
+      "ja": "{mod} は {other} {required} を必要としますが、インスタンスの {other} は {actual} です。",
+      "en": "{mod} needs {other} {required}, but the instance uses {other} {actual}."
+    },
+    "solutions": [
+      {
+        "ja": "Prismの「バージョン」画面で {other} を更新する({required})",
+        "en": "Update {other} in Prism's Version page ({required})"
+      },
+      {
+        "ja": "{mod} を今のローダーに対応した古いバージョンへ変える",
+        "en": "Use an older {mod} that supports the current loader"
+      }
+    ]
+  },
+  "MC_VERSION": {
+    "title": {
+      "ja": "Minecraftのバージョンに対応していない",
+      "en": "Made for another Minecraft version"
+    },
+    "detail": {
+      "ja": "{mod} は Minecraft {required} 用で、このインスタンス({mc})では動きません。",
+      "en": "{mod} is made for Minecraft {required} and does not run on {mc}."
+    },
+    "solutions": [
+      {
+        "ja": "{mod} の Minecraft {mc} 対応バージョンを入れる",
+        "en": "Install the Minecraft {mc} version of {mod}"
+      },
+      {
+        "ja": "{mod} を外す",
+        "en": "Remove {mod}"
+      }
+    ]
+  },
+  "WRONG_LOADER": {
+    "title": {
+      "ja": "別のローダー用のMod",
+      "en": "Mod for a different loader"
+    },
+    "detail": {
+      "ja": "{mod} は {required} 用で、このインスタンス({loader})では読み込まれません。",
+      "en": "{mod} is made for {required} and is not loaded by {loader}."
+    },
+    "solutions": [
+      {
+        "ja": "{mod} の {loader} 用を入れる",
+        "en": "Install the {loader} version of {mod}"
+      },
+      {
+        "ja": "{mod} を外す",
+        "en": "Remove {mod}"
+      }
+    ]
+  },
+  "DUPLICATE_MOD": {
+    "title": {
+      "ja": "同じModが重複している",
+      "en": "The same mod is installed twice"
+    },
+    "detail": {
+      "ja": "{mod} が複数のファイルで入っています({other})。",
+      "en": "{mod} is installed in more than one file ({other})."
+    },
+    "solutions": [
+      {
+        "ja": "古い方のファイルを外し、1つだけ残す",
+        "en": "Keep one file and remove the older one"
+      }
+    ]
+  },
+  "JAVA_VERSION": {
+    "title": {
+      "ja": "Javaのバージョンが対応していない",
+      "en": "Wrong Java version"
+    },
+    "detail": {
+      "ja": "Java {required} が必要ですが、Java {actual} で起動しています。",
+      "en": "Java {required} is required, but the game runs on Java {actual}."
+    },
+    "solutions": [
+      {
+        "ja": "Prismのインスタンス設定 →「Java」で Java {required} を選ぶ",
+        "en": "Pick Java {required} in the instance's Java settings in Prism"
+      },
+      {
+        "ja": "Java {required} を入れていなければ、Prismの「Javaをダウンロード」から入れる",
+        "en": "Download Java {required} from Prism if it is not installed"
+      }
+    ]
+  },
+  "OUT_OF_MEMORY": {
+    "title": {
+      "ja": "メモリ不足",
+      "en": "Out of memory"
+    },
+    "detail": {
+      "ja": "ゲームに割り当てたメモリが足りませんでした({other})。",
+      "en": "The game ran out of its allocated memory ({other})."
+    },
+    "solutions": [
+      {
+        "ja": "Prismのインスタンス設定 →「Java」→ 最大メモリを増やす(目安: 大型パックで 6〜8GB)",
+        "en": "Raise the maximum memory in the instance's Java settings (6-8 GB for large packs)"
+      },
+      {
+        "ja": "PCの空きメモリが少なければ、他のアプリを閉じる",
+        "en": "Close other apps if the PC is low on memory"
+      }
+    ]
+  },
+  "MIXIN_NO_REFMAP": {
+    "title": {
+      "ja": "Modファイルに必要なデータ(refmap)が入っていない",
+      "en": "A mod file is not a proper release build"
+    },
+    "detail": {
+      "ja": "{mod} のjarに書き換え用の対応表(refmap)が入っていないため、ゲームのコード({other})を書き換えられませんでした。配布ファイルの不備の可能性があります。",
+      "en": "The {mod} jar is missing its refmap, so it could not patch game code ({other}). It is most likely a development or unofficial build."
+    },
+    "solutions": [
+      {
+        "ja": "{mod} を配布元(CurseForge/Modrinth)の正式リリースに入れ替える",
+        "en": "Replace {mod} with the official release from CurseForge or Modrinth"
+      },
+      {
+        "ja": "{mod} を外す",
+        "en": "Remove {mod}"
+      }
+    ]
+  },
+  "KNOWN_BROKEN": {
+    "title": {
+      "ja": "壊れていると報告されているModがある",
+      "en": "A mod is reported as broken"
+    },
+    "detail": {
+      "ja": "{mod} のこのファイルは、CrashHunter Database で壊れていると報告されています({other}、{actual}件)。",
+      "en": "This file of {mod} is reported as broken in CrashHunter Database ({other}, {actual} reports)."
+    },
+    "solutions": [
+      {
+        "ja": "{mod} を別のバージョンに入れ替える",
+        "en": "Replace {mod} with another version"
+      },
+      {
+        "ja": "{mod} を外す",
+        "en": "Remove {mod}"
+      }
+    ]
+  },
+  "KNOWN_CONFLICT": {
+    "title": {
+      "ja": "クラッシュすると報告されている組み合わせがある",
+      "en": "A combination is reported to crash"
+    },
+    "detail": {
+      "ja": "{mod} と {other} の組み合わせは、CrashHunter Database で起動に失敗すると報告されています({actual}件)。",
+      "en": "{mod} with {other} is reported to fail to start in CrashHunter Database ({actual} reports)."
+    },
+    "solutions": [
+      {
+        "ja": "どちらかを別のバージョンに入れ替える",
+        "en": "Use another version of one of them"
+      },
+      {
+        "ja": "原因特定で確かめる",
+        "en": "Confirm it with Find Cause",
+        "bisect": true
+      }
+    ]
+  },
+  "MIXIN_FAILURE": {
+    "title": {
+      "ja": "Modどうしの書き換えが衝突した",
+      "en": "Mixin conflict between mods"
+    },
+    "detail": {
+      "ja": "{mod} がゲームのコード({other})を書き換えられませんでした。別のModとの競合か、バージョン違いです。",
+      "en": "{mod} failed to patch game code ({other}). Another mod conflicts with it, or the versions do not match."
+    },
+    "solutions": [
+      {
+        "ja": "{mod} を最新バージョンに更新する",
+        "en": "Update {mod}"
+      },
+      {
+        "ja": "原因特定で、一緒に入れるとクラッシュするModを探す",
+        "en": "Use Find Cause to find the mod it conflicts with",
+        "bisect": true
+      },
+      {
+        "ja": "{mod} を外す",
+        "en": "Remove {mod}"
+      }
+    ]
+  },
+  "CORRUPT_JAR": {
+    "title": {
+      "ja": "Modファイルが壊れている",
+      "en": "A mod file is corrupted"
+    },
+    "detail": {
+      "ja": "{other} を読み込めませんでした。ダウンロードが途中で切れた可能性があります。",
+      "en": "{other} could not be read. The download may have been cut off."
+    },
+    "solutions": [
+      {
+        "ja": "{other} を削除して、配布元から入れ直す",
+        "en": "Delete {other} and download it again"
+      }
+    ]
+  },
+  "CLASS_MISMATCH": {
+    "title": {
+      "ja": "Mod同士のバージョンが対応していない",
+      "en": "Mod versions do not match"
+    },
+    "detail": {
+      "ja": "{mod} が、存在しないコード({other})を呼び出しました。別のMod・ローダー・Minecraft向けのバージョンが混ざっています。",
+      "en": "{mod} called code that does not exist ({other}). It was built for another version of a mod, the loader or Minecraft."
+    },
+    "solutions": [
+      {
+        "ja": "{mod} と、その前提Modを同じ時期の対応バージョンにそろえる",
+        "en": "Use matching versions of {mod} and the mods it depends on"
+      },
+      {
+        "ja": "{mod} が Minecraft {mc} 用か確かめる",
+        "en": "Check that {mod} is made for Minecraft {mc}"
+      }
+    ]
+  },
+  "CLIENT_ONLY_ON_SERVER": {
+    "title": {
+      "ja": "クライアント専用Modがサーバーに入っている",
+      "en": "Client-only mod on a server"
+    },
+    "detail": {
+      "ja": "{mod} は画面表示用のModで、サーバーでは動きません。",
+      "en": "{mod} is client-only and cannot run on a server."
+    },
+    "solutions": [
+      {
+        "ja": "サーバーの mods から {mod} を外す",
+        "en": "Remove {mod} from the server's mods folder"
+      }
+    ]
+  },
+  "CONFIG_ERROR": {
+    "title": {
+      "ja": "設定ファイルが壊れている",
+      "en": "A config file is broken"
+    },
+    "detail": {
+      "ja": "設定ファイル {other} を読み込めませんでした。",
+      "en": "The config file {other} could not be read."
+    },
+    "solutions": [
+      {
+        "ja": "config フォルダーの {other} を削除する(次の起動で作り直されます)",
+        "en": "Delete {other} in the config folder (it is recreated on the next launch)"
+      }
+    ]
+  },
+  "GPU_DRIVER": {
+    "title": {
+      "ja": "グラフィックドライバーの問題",
+      "en": "Graphics driver problem"
+    },
+    "detail": {
+      "ja": "グラフィックドライバー({other})の中でクラッシュしました。Modではなく、ドライバーやOpenGLの問題の可能性が高いです。",
+      "en": "The game crashed inside the graphics driver ({other}). This is more likely a driver or OpenGL problem than a mod."
+    },
+    "solutions": [
+      {
+        "ja": "グラフィックドライバーを最新にする",
+        "en": "Update the graphics driver"
+      },
+      {
+        "ja": "ノートPCなら、Javaを外部GPU(高パフォーマンス)で動かす設定にする",
+        "en": "On laptops, make Java use the dedicated GPU"
+      },
+      {
+        "ja": "シェーダー・描画系Mod(Oculus、Iris、Embeddium など)を外して試す",
+        "en": "Try without shader / rendering mods (Oculus, Iris, Embeddium...)"
+      }
+    ]
+  },
+  "NATIVE_CRASH": {
+    "title": {
+      "ja": "Java本体が異常終了した",
+      "en": "The Java runtime crashed"
+    },
+    "detail": {
+      "ja": "Javaの内部でクラッシュしました({other})。",
+      "en": "Java itself crashed ({other})."
+    },
+    "solutions": [
+      {
+        "ja": "Javaを別のバージョン・配布元(Temurin など)に変える",
+        "en": "Try another Java build (e.g. Temurin)"
+      },
+      {
+        "ja": "メモリ割り当てを見直す",
+        "en": "Check the memory settings"
+      },
+      {
+        "ja": "原因特定で原因のModがないか確かめる",
+        "en": "Use Find Cause to check for a mod cause",
+        "bisect": true
+      }
+    ]
+  },
+  "WATCHDOG_HANG": {
+    "title": {
+      "ja": "処理が止まった(フリーズ)",
+      "en": "The game froze"
+    },
+    "detail": {
+      "ja": "1回の処理に {actual} 秒かかり、停止と判定されました。",
+      "en": "One tick took {actual} seconds, so the game was considered frozen."
+    },
+    "solutions": [
+      {
+        "ja": "疑わしいMod({mod})を外して試す",
+        "en": "Try without the suspected mod ({mod})"
+      },
+      {
+        "ja": "server.properties の max-tick-time を一時的に -1 にして様子を見る",
+        "en": "Set max-tick-time=-1 in server.properties temporarily"
+      }
+    ]
+  },
+  "INCOMPATIBLE_MOD": {
+    "title": {
+      "ja": "一緒に使えないModがある",
+      "en": "Incompatible mods"
+    },
+    "detail": {
+      "ja": "{mod} は {other} と一緒に使えません。",
+      "en": "{mod} cannot be used together with {other}."
+    },
+    "solutions": [
+      {
+        "ja": "{mod} か {other} のどちらかを外す",
+        "en": "Remove either {mod} or {other}"
+      }
+    ]
+  },
+  "MOD_LOAD_ERROR": {
+    "title": {
+      "ja": "Modの読み込み中にエラー",
+      "en": "Error while loading a mod"
+    },
+    "detail": {
+      "ja": "{mod} の読み込み中にエラーが起きました({other})。",
+      "en": "{mod} failed while loading ({other})."
+    },
+    "solutions": [
+      {
+        "ja": "{mod} を更新する",
+        "en": "Update {mod}"
+      },
+      {
+        "ja": "{mod} を外す",
+        "en": "Remove {mod}"
+      },
+      {
+        "ja": "外しても直らなければ、原因特定で組み合わせを調べる",
+        "en": "If removing it does not help, use Find Cause",
+        "bisect": true
+      }
+    ]
+  },
+  "MOD_RUNTIME_ERROR": {
+    "title": {
+      "ja": "Modの処理中にエラー",
+      "en": "Error inside a mod"
+    },
+    "detail": {
+      "ja": "{mod} の処理中に {other} が起きました。",
+      "en": "{other} occurred inside {mod}."
+    },
+    "solutions": [
+      {
+        "ja": "{mod} を最新バージョンに更新する",
+        "en": "Update {mod}"
+      },
+      {
+        "ja": "{mod} の作者にクラッシュレポートを添えて報告する",
+        "en": "Report it to the author of {mod} with the crash report"
+      },
+      {
+        "ja": "{mod} を外す",
+        "en": "Remove {mod}"
+      }
+    ]
+  },
+  "NOT_A_MOD": {
+    "title": {
+      "ja": "Mod以外が原因",
+      "en": "Not caused by a mod"
+    },
+    "detail": {
+      "ja": "Modをすべて外してもクラッシュしました。",
+      "en": "The game still crashed with every mod disabled."
+    },
+    "solutions": [
+      {
+        "ja": "Java・メモリ・グラフィックドライバーの設定を確かめる",
+        "en": "Check Java, memory and graphics driver settings"
+      },
+      {
+        "ja": "config フォルダーやリソースパックを見直す",
+        "en": "Check the config folder and resource packs"
+      }
+    ]
+  },
+  "UNKNOWN": {
+    "title": {
+      "ja": "原因を特定できない",
+      "en": "Cause not identified"
+    },
+    "detail": {
+      "ja": "既知のパターンに当てはまりませんでした({other})。",
+      "en": "No known pattern matched ({other})."
+    },
+    "solutions": [
+      {
+        "ja": "原因特定で原因のModを探す",
+        "en": "Use Find Cause to find the mod",
+        "bisect": true
+      },
+      {
+        "ja": "疑わしいModがあれば更新する",
+        "en": "Update any suspected mod"
+      }
+    ]
+  },
+  "CRASH_TOOL": {
+    "title": {
+      "ja": "クラッシュを扱う別のModが入っている",
+      "en": "Another crash-handling mod is installed"
+    },
+    "detail": {
+      "ja": "{mod} はクラッシュしたときに独自の画面を出すため、CrashHunter がクラッシュを正しく判定できないことがあります。原因特定と構成調整では自動で無効にします。",
+      "en": "{mod} shows its own window when the game crashes, so CrashHunter may not detect the crash. Find Cause and Tune Mods disable it automatically."
+    },
+    "solutions": [
+      {
+        "ja": "{mod} を無効にする",
+        "en": "Disable {mod}"
+      }
+    ]
+  },
+  "NO_PROBLEM": {
+    "title": {
+      "ja": "問題は見つかりませんでした",
+      "en": "No problem found"
+    },
+    "detail": {
+      "ja": "既知の問題は見つかりませんでした。",
+      "en": "No known problem was found."
+    },
+    "solutions": []
+  }
+}

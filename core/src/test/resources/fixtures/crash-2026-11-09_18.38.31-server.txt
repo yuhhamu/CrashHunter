@@ -1,0 +1,55 @@
+---- Minecraft Crash Report ----
+// Don't be sad, have a hug! <3
+
+Time: 26/11/09 18:38
+Description: Exception in server tick loop
+
+Duplicate Mods:
+	appliedenergistics2 : /work\MinecraftMods\AE2CraftPriority\Forge\1.12.2\run\.\mods\appliedenergistics2-rv6-stable-8.jar
+	appliedenergistics2 : C:\Users\<user>\.gradle\caches\minecraft\deobfedDeps\deobf\curse\maven\applied-energistics-2-223794\2747063\applied-energistics-2-223794-2747063.jar
+
+net.minecraftforge.fml.common.DuplicateModsFoundException
+	at net.minecraftforge.fml.common.Loader.identifyDuplicates(Loader.java:466)
+	at net.minecraftforge.fml.common.Loader.identifyMods(Loader.java:428)
+	at net.minecraftforge.fml.common.Loader.loadMods(Loader.java:568)
+	at net.minecraftforge.fml.server.FMLServerHandler.beginServerLoading(FMLServerHandler.java:98)
+	at net.minecraftforge.fml.common.FMLCommonHandler.onServerStart(FMLCommonHandler.java:333)
+	at net.minecraft.server.dedicated.DedicatedServer.init(DedicatedServer.java:125)
+	at net.minecraft.server.MinecraftServer.run(MinecraftServer.java:486)
+	at java.lang.Thread.run(Thread.java:748)
+
+No Mixin Metadata is found in the Stacktrace.
+
+
+A detailed walkthrough of the error, its code path and all known details is as follows:
+---------------------------------------------------------------------------------------
+
+-- System Details --
+Details:
+	Minecraft Version: 1.12.2
+	Operating System: Windows 10 (amd64) version 10.0
+	Java Version: 1.8.0_202, Oracle Corporation
+	Java VM Version: Java HotSpot(TM) 64-Bit Server VM (mixed mode), Oracle Corporation
+	Memory: 1887392632 bytes (1799 MB) / 2021654528 bytes (1928 MB) up to 2021654528 bytes (1928 MB)
+	JVM Flags: 2 total; -Xms2048M -Xmx2048M
+	IntCache: cache: 0, tcache: 0, allocated: 0, tallocated: 0
+	FML: MCP 9.42 Powered by Forge 14.23.5.2847 8 mods loaded, 0 mods active
+	States: 'U' = Unloaded 'L' = Loaded 'C' = Constructed 'H' = Pre-initialized 'I' = Initialized 'J' = Post-initialized 'A' = Available 'D' = Disabled 'E' = Errored
+
+	| State | ID                  | Version      | Source                                   | Signature |
+	|:----- |:------------------- |:------------ |:---------------------------------------- |:--------- |
+	|       | minecraft           | 1.12.2       | minecraft.jar                            | None      |
+	|       | mcp                 | 9.42         | minecraft.jar                            | None      |
+	|       | mixinbooter         | 11.1         | minecraft.jar                            | None      |
+	|       | FML                 | 8.0.99.99    | forgeBin-1.12.2-14.23.5.2847.jar         | None      |
+	|       | forge               | 14.23.5.2847 | forgeBin-1.12.2-14.23.5.2847.jar         | None      |
+	|       | appliedenergistics2 | rv6-stable-7 | applied-energistics-2-223794-2747063.jar | None      |
+	|       | ae2craftpriority    | @VERSION@    | ae2craftpriority-1.0.0.jar               | None      |
+	|       | appliedenergistics2 | rv6-stable-7 | appliedenergistics2-rv6-stable-8.jar     | None      |
+
+	Loaded coremods (and transformers): 
+MixinBooter (mixinbooter-11.1.jar)
+  
+	Profiler Position: N/A (disabled)
+	Is Modded: Definitely; Server brand changed to 'fml,forge'
+	Type: Dedicated Server (map_server.txt)

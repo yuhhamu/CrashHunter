@@ -1,0 +1,23 @@
+name = "crashhunter-db"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+
+workers_dev = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "crashhunter-db"
+database_id = "93a13298-d6f5-4ae4-97b0-618a186861d6"
+migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "SNAP"
+id = "62e473c996314d609654bd4a3f121465"
+
+[triggers]
+crons = ["17 * * * *"]
+
+[vars]
+LIMIT_PER_INSTALL_DAY = "60"
+LIMIT_PER_IP_DAY = "300"
+MAX_BODY = "262144"

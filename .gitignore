@@ -1,0 +1,14 @@
+.gradle/
+build/
+*/build/
+.kotlin/
+.idea/
+*.iml
+_incoming/
+.env
+_scratch/
+
+CLAUDE.md
+server/.dev.vars
+installer/run-detached.ps1
+.signing/

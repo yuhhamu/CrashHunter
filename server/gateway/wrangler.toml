@@ -1,0 +1,10 @@
+name = "yuhhamu-db-gateway"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+workers_dev = false
+
+routes = [{ pattern = "db.yuhhamu.com", custom_domain = true }]
+
+services = [
+  { binding = "CRASHHUNTER", service = "crashhunter-db" },
+]
