@@ -7,7 +7,7 @@ $ver = (Select-String -Path (Join-Path $root "build.gradle.kts") -Pattern 'versi
 $tag = "v$ver"
 "version $ver"
 
-$files = @("CrashHunter-Setup-$ver.exe", "CrashHunter-$ver-portable.zip", "SHA256SUMS.txt", "SHA256SUMS.txt.sig") | ForEach-Object { Join-Path $out $_ }
+$files = @("CrashHunter-Setup-$ver.exe", "CrashHunter-$ver-portable.zip", "SHA256SUMS.txt", "SHA256SUMS.txt.sig", "manifest.json", "manifest.json.sig") | ForEach-Object { Join-Path $out $_ }
 foreach ($f in $files) { if (-not (Test-Path $f)) { throw "missing $f" } }
 $sums = Get-Content (Join-Path $out "SHA256SUMS.txt")
 foreach ($f in $files[0..1]) {
@@ -20,6 +20,11 @@ $java = "Z:\Claude\Tools\Java\jdk-21\bin\java.exe"
 $verify = Join-Path $PSScriptRoot "verify-sums.java"
 $sig = & $java $verify (Join-Path $out "SHA256SUMS.txt") (Join-Path $out "SHA256SUMS.txt.sig") 2>$null
 if ($sig -ne "true") { throw "signature check failed" }
+$msig = & $java $verify (Join-Path $out "manifest.json") (Join-Path $out "manifest.json.sig") 2>$null
+if ($msig -ne "true") { throw "manifest signature check failed" }
+$man = Get-Content (Join-Path $out "manifest.json") -Raw | ConvertFrom-Json
+if ($man.version -ne $ver) { throw "manifest version mismatch" }
+foreach ($f in $files[0..1]) { $n = Split-Path $f -Leaf; if ($man.files.$n -ne (Get-FileHash -Algorithm SHA256 $f).Hash.ToLower()) { throw "manifest hash mismatch $n" } }
 "ok signature"
 
 $log = Get-Content (Join-Path $root "CHANGELOG.md") -Encoding UTF8

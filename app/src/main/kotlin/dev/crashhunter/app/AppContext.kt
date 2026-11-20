@@ -174,7 +174,7 @@ class AppContext {
 
 }
 
-const val VERSION = "0.1.0"
+const val VERSION = "0.1.1"
 val VERSION_LABEL: String get() = if (VERSION.startsWith("0.")) "$VERSION beta" else VERSION
 
 class Strings(lang: String) {

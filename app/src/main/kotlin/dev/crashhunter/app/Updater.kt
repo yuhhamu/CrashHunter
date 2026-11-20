@@ -10,6 +10,41 @@ import java.util.Base64
 
 object Updater {
     const val PUBLIC_KEY = "MCowBQYDK2VwAyEAqbphWCLzOjftvUptjktkQJ+8iQ9v+067jNB3nAbTLBk="
+    const val BACKUP_KEY = "MCowBQYDK2VwAyEAmTaxUCUY7QDd6XdcPrPFyPUCiZNx5WtIWFY5Cp3Keqg="
+    val KEYS: List<String> get() = listOf(PUBLIC_KEY, BACKUP_KEY).filter { it.startsWith("MC") }
+    const val MANIFEST = "manifest.json"
+
+    data class Manifest(val app: String, val version: String, val published: String, val files: Map<String, String>, val revoke: List<String>)
+
+    private fun revokedFile() = File(AppDirs.dataDir, "revoked-keys.txt")
+
+    fun revoked(file: File = revokedFile()): Set<String> = runCatching { file.readLines().map { it.trim() }.filter { it.isNotEmpty() }.toSet() }.getOrDefault(emptySet())
+
+    fun parseManifest(text: String): Manifest? = runCatching {
+        val o = kotlinx.serialization.json.Json.parseToJsonElement(text) as kotlinx.serialization.json.JsonObject
+        fun str(k: String) = (o[k] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content
+        val files = (o["files"] as kotlinx.serialization.json.JsonObject).mapValues { (_, v) -> (v as kotlinx.serialization.json.JsonPrimitive).content.lowercase() }
+        val revoke = when (val r = o["revoke"]) {
+            is kotlinx.serialization.json.JsonArray -> r.map { (it as kotlinx.serialization.json.JsonPrimitive).content }
+            is kotlinx.serialization.json.JsonPrimitive -> listOfNotNull(r.content.takeIf { r.isString && it.isNotBlank() })
+            else -> emptyList()
+        }
+        Manifest(str("app")!!, str("version")!!, str("published") ?: "", files, revoke)
+    }.getOrNull()
+
+    fun checkManifest(data: ByteArray, signature: String, releaseVersion: String, current: String,
+                      keys: List<String> = KEYS, revokedFile: File = revokedFile()): Manifest {
+        val trusted = keys.filter { it !in revoked(revokedFile) }
+        val signer = trusted.firstOrNull { verifySignature(data, signature, it) } ?: error("signature mismatch")
+        val m = parseManifest(data.toString(Charsets.UTF_8)) ?: error("bad manifest")
+        if (m.app != "CrashHunter") error("bad manifest")
+        if (m.version != releaseVersion) error("version mismatch")
+        if (!UpdateCheck.isNewer(m.version, current)) error("not newer")
+        if (signer in m.revoke) error("signer revoked")
+        val add = m.revoke.filter { it in keys && it !in revoked(revokedFile) }
+        if (add.isNotEmpty()) runCatching { revokedFile.parentFile?.mkdirs(); revokedFile.appendText(add.joinToString("\n", postfix = "\n")) }
+        return m
+    }
     private val OCTET = mapOf("Accept" to "application/octet-stream")
 
     fun installed(): Boolean {
@@ -36,13 +71,13 @@ object Updater {
     suspend fun download(ctx: AppContext, r: UpdateCheck.Release): File {
         val name = "CrashHunter-Setup-${r.version}.exe"
         val setupUrl = r.assets[name] ?: error("no installer in the release")
-        val sumsUrl = r.assets["SHA256SUMS.txt"] ?: error("no SHA256SUMS.txt")
-        val sigUrl = r.assets["SHA256SUMS.txt.sig"] ?: error("no signature")
+        val manifestUrl = r.assets[MANIFEST] ?: error("no manifest")
+        val sigUrl = r.assets["$MANIFEST.sig"] ?: error("no signature")
         val dir = File(AppDirs.dataDir, "updates").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
-        val sums = ctx.http.download(sumsUrl, File(dir, "SHA256SUMS.txt"), OCTET)
-        val sig = ctx.http.download(sigUrl, File(dir, "SHA256SUMS.txt.sig"), OCTET)
-        if (!verifySignature(sums.readBytes(), sig.readText())) error("signature mismatch")
-        val expected = expectedHash(sums.readText(), name) ?: error("installer not listed")
+        val manifest = ctx.http.download(manifestUrl, File(dir, MANIFEST), OCTET, maxBytes = 1L shl 20)
+        val sig = ctx.http.download(sigUrl, File(dir, "$MANIFEST.sig"), OCTET, maxBytes = 1L shl 16)
+        val m = checkManifest(manifest.readBytes(), sig.readText(), r.version, VERSION)
+        val expected = m.files[name] ?: error("installer not listed")
         val setup = ctx.http.download(setupUrl, File(dir, name), OCTET)
         if (sha256(setup) != expected) { setup.delete(); error("hash mismatch") }
         return setup

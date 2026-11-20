@@ -55,7 +55,7 @@ Modを入れる必要はありません。ランチャーの外から動きま�
 CrashHunter の配布元は **https://github.com/yuhhamu/CrashHunter/releases だけ**です。ほかのサイトやミラー、知らない人から受け取ったファイルは使わないでください。
 
 コード署名(Authenticode)はしていないため、初回起動時にWindowsの「PCを保護しました」が出ることがあります。「詳細情報」→「実行」で起動できます。
-そのかわり、リリースのファイルは作者の鍵で署名しています。アプリ内の更新は、この署名とハッシュを自動で確かめてから入れます。
+そのかわり、リリースのファイルは作者の鍵で署名しています。アプリ内の更新は、署名した更新情報(`manifest.json`)で版とハッシュを確かめてから入れ、今より古い版には戻しません。
 
 手で確かめるときは、ダウンロードしたファイルと同じフォルダーに `SHA256SUMS.txt` を置いて、PowerShell で次を実行します。
 
@@ -74,6 +74,7 @@ openssl pkeyutl -verify -pubin -inkey crashhunter-update.pub.pem -rawin -in SHA2
 ```
 
 `Signature Verified Successfully` と出れば、作者が署名したものです。公開鍵は上の1行と、アプリの中の値が同じです。
+普段の鍵に問題が起きたときだけ、予備の鍵 `MCowBQYDK2VwAyEAmTaxUCUY7QDd6XdcPrPFyPUCiZNx5WtIWFY5Cp3Keqg=` で署名します(`installer/update-key-backup.pub` と同じ値)。
 
 ### CurseForge のModの取得
 

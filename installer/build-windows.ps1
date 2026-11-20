@@ -1,7 +1,8 @@
 ﻿param(
     [string]$JavaHome = "Z:\Claude\Tools\Java\jdk-21",
     [string]$Gradle = "Z:\Claude\Tools\Gradle\gradle-8.14.2\bin\gradle.bat",
-    [string]$Iscc = "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+    [string]$Iscc = "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
+    [string]$SignKeyName = "update-key.pk8"
 )
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
@@ -52,12 +53,22 @@ $targets = Get-ChildItem $out -File | Where-Object { $_.Name -like "CrashHunter-
 $lines = foreach ($t in $targets) { "{0}  {1}" -f (Get-FileHash -Algorithm SHA256 $t.FullName).Hash.ToLower(), $t.Name }
 [IO.File]::WriteAllLines($sums, [string[]]$lines)
 L "sha256 ok ($($targets.Count))"
-$signKey = Get-SecretFile "update-key.pk8"
-$sig = "$sums.sig"
-if (Test-Path $sig) { Remove-Item -Force $sig }
+$manifest = Join-Path $out "manifest.json"
+$revokeFile = Join-Path $root "installer\revoked-keys.txt"
+$revoke = @()
+if (Test-Path $revokeFile) { $revoke = @(Get-Content $revokeFile | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith("#") }) }
+$fileMap = [ordered]@{}
+foreach ($t in $targets) { $fileMap[$t.Name] = (Get-FileHash -Algorithm SHA256 $t.FullName).Hash.ToLower() }
+$m = [ordered]@{ app = "CrashHunter"; version = $ver; published = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"); files = $fileMap; revoke = $revoke }
+[IO.File]::WriteAllText($manifest, ($m | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding($false)))
+L "manifest ok"
+$signKey = Get-SecretFile $SignKeyName
+foreach ($f in @($sums, $manifest)) { if (Test-Path "$f.sig") { Remove-Item -Force "$f.sig" } }
 if ($signKey) {
-    & "$JavaHome\bin\java.exe" (Join-Path $root "installer\SignSums.java") $signKey $sums >> $log 2>&1
-    L ("sign exit $LASTEXITCODE " + [bool](Test-Path $sig))
+    foreach ($f in @($sums, $manifest)) {
+        & "$JavaHome\bin\java.exe" (Join-Path $root "installer\SignSums.java") $signKey $f >> $log 2>&1
+        L ("sign exit $LASTEXITCODE " + [bool](Test-Path "$f.sig") + " " + (Split-Path $f -Leaf))
+    }
 } else { L "sign skipped (no key)" }
 Get-ChildItem $out | ForEach-Object { L ("{0} {1:N1} MB" -f $_.Name, ($_.Length / 1MB)) }
 L "END"

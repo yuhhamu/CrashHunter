@@ -57,4 +57,46 @@ class UpdaterTest {
         assertNull(Updater.parseReturnValue(""))
         assertTrue(Updater.detachScript(java.io.File("C:/x/CrashHunter-Setup-1.2.6.exe")).startsWith("\$ProgressPreference = 'SilentlyContinue';"))
     }
+
+    private fun keyPair() = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+    private fun pub(p: java.security.KeyPair) = Base64.getEncoder().encodeToString(p.public.encoded)
+    private fun sign(p: java.security.KeyPair, data: ByteArray) = Base64.getEncoder().encodeToString(Signature.getInstance("Ed25519").run { initSign(p.private); update(data); sign() })
+    private fun manifest(v: String, revoke: List<String> = emptyList()) =
+        """{"app":"CrashHunter","version":"$v","published":"2026-11-20T00:00:00Z","files":{"CrashHunter-Setup-$v.exe":"${"A".repeat(64)}"},"revoke":[${revoke.joinToString(",") { "\"$it\"" }}]}""".toByteArray()
+
+    @Test
+    fun acceptsASignedNewerManifest() {
+        val main = keyPair(); val backup = keyPair()
+        val rev = java.io.File(java.nio.file.Files.createTempDirectory("chrev").toFile(), "revoked.txt")
+        val data = manifest("0.1.1")
+        val m = Updater.checkManifest(data, sign(main, data), "0.1.1", "0.1.0", listOf(pub(main), pub(backup)), rev)
+        assertEquals("a".repeat(64), m.files["CrashHunter-Setup-0.1.1.exe"])
+        val byBackup = Updater.checkManifest(data, sign(backup, data), "0.1.1", "0.1.0", listOf(pub(main), pub(backup)), rev)
+        assertEquals("0.1.1", byBackup.version)
+    }
+
+    @Test
+    fun refusesOlderOrMismatchedVersions() {
+        val main = keyPair()
+        val rev = java.io.File(java.nio.file.Files.createTempDirectory("chrev").toFile(), "revoked.txt")
+        val old = manifest("0.1.0")
+        assertTrue(runCatching { Updater.checkManifest(old, sign(main, old), "0.1.0", "0.1.0", listOf(pub(main)), rev) }.isFailure)
+        val newer = manifest("0.1.2")
+        assertTrue(runCatching { Updater.checkManifest(newer, sign(main, newer), "0.1.3", "0.1.0", listOf(pub(main)), rev) }.isFailure)
+        assertTrue(runCatching { Updater.checkManifest(newer, sign(keyPair(), newer), "0.1.2", "0.1.0", listOf(pub(main)), rev) }.isFailure)
+    }
+
+    @Test
+    fun theBackupKeyCanRevokeTheMainKey() {
+        val main = keyPair(); val backup = keyPair()
+        val keys = listOf(pub(main), pub(backup))
+        val rev = java.io.File(java.nio.file.Files.createTempDirectory("chrev").toFile(), "revoked.txt")
+        val rotation = manifest("0.2.0", listOf(pub(main)))
+        Updater.checkManifest(rotation, sign(backup, rotation), "0.2.0", "0.1.0", keys, rev)
+        assertTrue(pub(main) in Updater.revoked(rev))
+        val forged = manifest("0.3.0")
+        assertTrue(runCatching { Updater.checkManifest(forged, sign(main, forged), "0.3.0", "0.2.0", keys, rev) }.isFailure)
+        val selfRevoke = manifest("0.2.1", listOf(pub(backup)))
+        assertTrue(runCatching { Updater.checkManifest(selfRevoke, sign(backup, selfRevoke), "0.2.1", "0.2.0", keys, rev) }.isFailure)
+    }
 }
