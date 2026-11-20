@@ -557,6 +557,13 @@ class TunePanel(private val ctx: AppContext, private val frame: MainFrame) : JPa
                     changes += s.f("tune.step.replaced", name(e.file), "", e.label.removeSuffix(".jar")).replace("  ", " "); details.changes(changes)
                     log(s.f("tune.log.restored", name(e.file), e.label.removeSuffix(".jar")))
                 }
+                is TuneEvent.Ineffective -> {
+                    status.restored(listOf(e.file) + e.also)
+                    status.appendFinding(s.f("tune.facts.ineffective", name(e.file)))
+                    changes.removeAll { it == s.f("tune.step.removed", name(e.file)) || it.startsWith(s.f("tune.step.removed", name(e.file)) + " ") }
+                    details.changes(changes)
+                    log(s.f("tune.log.ineffective", name(e.file)))
+                }
                 is TuneEvent.RemovedMods -> {
                     status.removedMods(listOf(e.file) + e.also)
                     status.appendFinding(s.f("tune.facts.removed", (listOf(e.file) + e.also).joinToString(", ") { name(it) }))

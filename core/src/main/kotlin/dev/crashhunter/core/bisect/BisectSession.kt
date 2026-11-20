@@ -118,6 +118,12 @@ class BisectSession(
         var lastFailSource: dev.crashhunter.core.analyze.CrashSource? = null
         val lastCrashText = java.util.concurrent.ConcurrentHashMap<Int, String>()
         val tracker = dev.crashhunter.core.launcher.GameTracker(AppDirs.gamesFile)
+        val extraCopies = mutableListOf<GameInstance>()
+        val stallDir = java.io.File(dev.crashhunter.core.util.AppDirs.dataDir, "logs")
+        val guardAll: () -> Unit = {
+            val changed = (listOf(target) + extraCopies).count { runCatching { LoadGuard.limitThreads(it) }.getOrDefault(false) }
+            if (changed > 0) event("loadGuard")
+        }
         val runner = PrismTrialRunner(
             controller, target, toggler, candidates, trialSettings,
             fingerprintOf = { src ->
@@ -134,9 +140,10 @@ class BisectSession(
             },
             windowTitle = titleFor(0),
             minimizeWindow = minimize,
+            onStall = guardAll,
+            dumpDir = stallDir,
         )
         val extras = mutableListOf<PrismTrialRunner>()
-        val extraCopies = mutableListOf<GameInstance>()
         for (slot in 1 until parallel) {
             progress(BisectProgress.Preparing("copy"))
             val copy = runCatching { WorkCopy.create(source, settings.includeSaves, slot) { progress(BisectProgress.Preparing("copy:$it")) } }.getOrNull() ?: break
@@ -156,6 +163,8 @@ class BisectSession(
                 status = { st -> slotState(slot, st) },
                 windowTitle = titleFor(slot),
                 minimizeWindow = minimize,
+                onStall = guardAll,
+                dumpDir = stallDir,
             )
         }
         multi = extras.isNotEmpty()

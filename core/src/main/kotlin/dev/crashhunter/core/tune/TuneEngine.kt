@@ -82,6 +82,10 @@ data class EngineState(
     val policy: Map<String, ModPolicy> = emptyMap(),
     val loaderTried: Boolean = false,
     val loaderNow: String? = null,
+    val innocent: List<String> = emptyList(),
+    val lastRemoved: Removed? = null,
+    val lastDeps: List<String> = emptyList(),
+    val lastFingerprint: CrashFingerprint? = null,
 )
 
 data class TuneResult(val status: TuneStatus, val steps: List<TuneStep>, val blockedBy: List<String> = emptyList(), val message: String = "")
@@ -95,6 +99,7 @@ sealed interface TuneEvent {
     data class VersionResult(val file: String, val label: String, val result: TrialResult, val newFailure: Boolean) : TuneEvent
     data class NoVersions(val file: String) : TuneEvent
     data class RemovedMods(val file: String, val also: List<String>) : TuneEvent
+    data class Ineffective(val file: String, val also: List<String>) : TuneEvent
     data class TryLoader(val version: String, val index: Int, val count: Int) : TuneEvent
     data class TryFix(val kind: dev.crashhunter.core.fix.FixKind, val target: String, val params: Map<String, String>) : TuneEvent
     data class FixResult(val kind: dev.crashhunter.core.fix.FixKind, val target: String, val result: TrialResult, val newFailure: Boolean) : TuneEvent
@@ -124,7 +129,7 @@ class TuneEngine(
     private val disable: (files: Set<String>) -> Unit,
     private val sameFailure: (CrashFingerprint, CrashFingerprint) -> Boolean,
     private val listener: (TuneEvent) -> Unit = {},
-    private val maxRounds: Int = 8,
+    private val maxRounds: Int = 20,
     private val maxVersions: Int = 3,
     private val loader: LoaderOps? = null,
     private val removeFirst: Boolean = false,
@@ -139,6 +144,29 @@ class TuneEngine(
     private val policy = HashMap(initialPolicy)
     private fun policyOf(file: String) = policy[file] ?: ModPolicy.REMOVABLE
     private var stopped: TuneResult? = null
+    private class LastRemoval(val removed: Removed, val deps: Set<String>, val fingerprint: CrashFingerprint?, val others: Set<String>)
+    private var lastRemoval: LastRemoval? = null
+    private val innocent = HashSet<String>()
+
+    private fun mismatch(fp: CrashFingerprint?): Boolean {
+        val e = fp?.exception ?: return false
+        return e == "cause:CLASS_MISMATCH" || MISMATCH_ERRORS.any { e.endsWith(it) }
+    }
+
+    private fun undoIneffective(found: TuneFind.Culprits, steps: MutableList<TuneStep>) {
+        val prev = lastRemoval ?: return
+        lastRemoval = null
+        val a = prev.fingerprint
+        val b = found.fingerprint
+        val same = if (a != null && b != null) sameFailure(a, b) && found.files.any { it in prev.others }
+            else found.files.count { it in prev.others } >= 2
+        if (!same) return
+        enable(prev.deps)
+        pending.removeAll { it.removed == prev.removed }
+        steps.remove(prev.removed)
+        innocent += prev.removed.file
+        listener(TuneEvent.Ineffective(prev.removed.file, prev.removed.alsoRemoved))
+    }
 
     init {
         resume?.let { r ->
@@ -146,11 +174,17 @@ class TuneEngine(
             loaderTried = r.loaderTried
             r.loaderNow?.let { loaderNow = it }
             r.pending.forEach { pending += Pending(it.removed, it.disabled.toSet()) }
+            innocent += r.innocent
+            val last = r.lastRemoved ?: r.steps.lastOrNull() as? Removed
+            if (last != null) {
+                val deps = if (r.lastRemoved != null) r.lastDeps.toSet() else r.pending.firstOrNull { it.removed == last }?.disabled?.toSet() ?: (setOf(last.file) + last.alsoRemoved)
+                lastRemoval = LastRemoval(last, deps, r.lastFingerprint, last.culprits.toSet() - last.file)
+            }
         }
     }
 
     fun state(round: Int, steps: List<TuneStep>) = EngineState(round, steps.toList(), pending.map { PendingState(it.removed, it.disabled.sorted()) },
-        HashMap(policy), loaderTried, loaderNow)
+        HashMap(policy), loaderTried, loaderNow, innocent.sorted(), lastRemoval?.removed, lastRemoval?.deps?.sorted() ?: emptyList(), lastRemoval?.fingerprint)
 
     suspend fun run(): TuneResult {
         val steps = (resume?.steps ?: emptyList()).toMutableList()
@@ -199,13 +233,14 @@ class TuneEngine(
                 is TuneFind.Culprits -> f
             }
             if (found.files.isEmpty()) return TuneResult(TuneStatus.INCONCLUSIVE, steps)
+            undoIneffective(found, steps)
             listener(TuneEvent.Found(found.files, found.direct, found.db))
             if (found.direct && found.files.all { policyOf(it) == ModPolicy.PIN }) return TuneResult(TuneStatus.BLOCKED, steps, blockedBy = found.files)
-            val options = found.files.filter { policyOf(it) == ModPolicy.REMOVABLE }
+            val options = found.files.filter { policyOf(it) == ModPolicy.REMOVABLE && it !in innocent }
                 .map { it to dependents(it) }
                 .filter { (_, deps) -> deps.all { policyOf(it) == ModPolicy.REMOVABLE } }
                 .sortedBy { (_, deps) -> deps.size }
-            val early = removeFirst && found.removable && !found.db && options.isNotEmpty()
+            val early = removeFirst && found.removable && !found.db && options.isNotEmpty() && !mismatch(found.fingerprint)
             if (!early) {
                 when (tryVersions(round, found, steps)) {
                     VersionOutcome.LAUNCHED -> { if (!restore(steps)) { checkpoint(state(round, steps)); return stoppedWith(steps) }; return TuneResult(TuneStatus.LAUNCHED, steps) }
@@ -228,6 +263,7 @@ class TuneEngine(
             val removed = Removed(round, pick, also, found.files)
             steps += removed
             if (early) pending += Pending(removed, deps)
+            if (found.removable && !found.db) lastRemoval = LastRemoval(removed, deps, found.fingerprint, found.files.toSet() - pick)
             listener(TuneEvent.RemovedMods(pick, also))
         }
         return TuneResult(TuneStatus.LIMIT, steps)
@@ -334,3 +370,5 @@ class TuneEngine(
         policy[from]?.let { policy[to] = it }
     }
 }
+
+private val MISMATCH_ERRORS = listOf("IncompatibleClassChangeError", "NoSuchMethodError", "NoSuchFieldError", "AbstractMethodError", "NoClassDefFoundError", "VerifyError")

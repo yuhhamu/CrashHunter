@@ -12,6 +12,7 @@ import kotlinx.serialization.Serializable
 enum class TrialResult { PASS, FAIL, HANG, START_FAILED, CANCELLED }
 
 const val PRISM_UNRESPONSIVE = "prismUnresponsive"
+const val STALLED = "stalled"
 const val INFERRED = "inferred"
 
 @Serializable

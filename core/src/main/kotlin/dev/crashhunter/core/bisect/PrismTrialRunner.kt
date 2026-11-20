@@ -74,12 +74,24 @@ class PrismTrialRunner(
     private val minimizeWindow: Boolean = false,
     private val settleMs: Long = 8_000,
     private val handoffMs: Long = 20_000,
+    private val stallMs: Long = 120_000,
+    private val stallCpuMs: Long = 4_000,
+    private val onStall: () -> Unit = { LoadGuard.limitThreads(instance) },
+    private val dumpDir: File? = null,
 ) : TrialRunner {
     companion object {
         private val launchGate = kotlinx.coroutines.sync.Mutex()
     }
 
-    override suspend fun run(enabled: Set<String>): TrialOutcome = withContext(Dispatchers.IO) {
+    override suspend fun run(enabled: Set<String>): TrialOutcome {
+        val first = attempt(enabled)
+        if (first.note != STALLED) return first
+        runCatching { onStall() }
+        status("stallRetry")
+        return attempt(enabled)
+    }
+
+    private suspend fun attempt(enabled: Set<String>): TrialOutcome = withContext(Dispatchers.IO) {
         toggler.apply(candidates, enabled)
         val since = System.currentTimeMillis() - 2_000
         val id = instance.id
@@ -102,6 +114,21 @@ class PrismTrialRunner(
         val tail = LogTail(File(instance.gameDir, "logs/latest.log"))
         var arranged = windowTitle == null && !minimizeWindow
         var arrangeTries = 0
+        val logFile = File(instance.gameDir, "logs/latest.log")
+        var growSize = -1L
+        var growAt = 0L
+        var cpuMark = 0L
+        var cpuMarkAt = 0L
+        fun stalled(now: Long): Boolean {
+            if (gameSeenAt == null || markerAt != null) return false
+            val size = logFile.length()
+            if (size != growSize) { growSize = size; growAt = now; cpuMark = LoadGuard.cpuMs(pids); cpuMarkAt = now; return false }
+            if (now - growAt < stallMs) return false
+            val cpu = LoadGuard.cpuMs(pids)
+            val busy = cpu - cpuMark > stallCpuMs * (now - cpuMarkAt) / stallMs.coerceAtLeast(1)
+            if (busy) { cpuMark = cpu; cpuMarkAt = now; growAt = now - stallMs / 2; return false }
+            return true
+        }
         try {
             while (true) {
                 val now = System.currentTimeMillis()
@@ -116,6 +143,11 @@ class PrismTrialRunner(
                     gameAlive = pids.isNotEmpty()
                     if (gameAlive) tracker?.add(id, pids)
                     if (gameAlive && gameSeenAt == null) { gameSeenAt = now; status("running") }
+                    if (gameAlive && stalled(now)) {
+                        status("stall")
+                        dumpDir?.let { d -> runInterruptible { LoadGuard.threadDump(pids, File(d, "stall-${instance.id.replace(Regex("[^A-Za-z0-9._-]"), "_")}-${now}.txt")) } }
+                        return@withContext TrialOutcome(TrialResult.HANG, note = STALLED)
+                    }
                     if (!gameAlive && gameSeenAt == null && runInterruptible { controller.handoffFailed(id, proc) }) {
                         if (relaunches >= maxRelaunches) return@withContext TrialOutcome(TrialResult.START_FAILED, note = PRISM_UNRESPONSIVE)
                         relaunches++
@@ -152,6 +184,7 @@ class PrismTrialRunner(
                         LaunchCrashDetector.detect(instance.gameDir, since)?.let { c ->
                             return@withContext TrialOutcome(TrialResult.FAIL, fingerprintOf(CrashSource(c.kind, c.file, c.file?.lastModified() ?: now)), c.reason, c.file?.name)
                         }
+                        if (markerAt == null && growAt > 0 && now - growAt >= stallMs / 2) return@withContext TrialOutcome(TrialResult.HANG, note = STALLED)
                         return@withContext TrialOutcome(TrialResult.FAIL, exitFingerprint(since), "exited")
                     }
                 }

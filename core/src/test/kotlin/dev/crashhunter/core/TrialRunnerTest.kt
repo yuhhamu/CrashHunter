@@ -146,4 +146,50 @@ class TrialRunnerTest {
         val second = if (first == "a") "b" else "a"
         assertTrue(events.indexOf("game:$first") < events.indexOf("launch:$second"), events.toString())
     }
+
+    @Test
+    fun `a load that stops is closed, guarded and launched again`() = runBlocking {
+        val (inst, t) = setup()
+        var launches = 0
+        var guarded = false
+        val game = FakeGame(inst.gameDir) { g ->
+            launches++
+            File(g, "logs").mkdirs()
+            File(g, "logs/latest.log").writeText(if (guarded) "loading\nTITLE\n" else "loading mods ".repeat(40) + "\n")
+        }
+        val r = PrismTrialRunner(game, inst, t, listOf("a.jar", "b.jar"), TrialSettings(JudgeMode.AUTO, startTimeoutSec = 5, timeoutSec = 30),
+            fingerprintOf = { CrashFingerprint("x") }, markers = markers, pollMs = 50, pidCheckMs = 100, afterStopMs = 10,
+            stallMs = 700, onStall = { guarded = true })
+        val o = r.run(setOf("a.jar", "b.jar"))
+        assertEquals(TrialResult.PASS, o.result, "launches=$launches guarded=$guarded note=${o.note}")
+        assertTrue(guarded)
+        assertEquals(2, launches)
+    }
+
+    @Test
+    fun `a load that keeps stopping is a stall, not a crash`() = runBlocking {
+        val (inst, t) = setup()
+        val game = FakeGame(inst.gameDir) { g -> File(g, "logs").mkdirs(); File(g, "logs/latest.log").writeText("loading mods\njava.lang.IllegalStateException: harmless\n") }
+        val r = PrismTrialRunner(game, inst, t, listOf("a.jar", "b.jar"), TrialSettings(JudgeMode.AUTO, startTimeoutSec = 5, timeoutSec = 30),
+            fingerprintOf = { CrashFingerprint("x") }, markers = markers, pollMs = 50, pidCheckMs = 100, afterStopMs = 10,
+            stallMs = 700, onStall = {})
+        val o = r.run(setOf("a.jar", "b.jar"))
+        assertEquals(TrialResult.HANG, o.result)
+        assertEquals(dev.crashhunter.core.bisect.STALLED, o.note)
+    }
+
+    @Test
+    fun `a game closed by hand after loading stopped counts as a stall`() = runBlocking {
+        val (inst, t) = setup()
+        lateinit var game: FakeGame
+        game = FakeGame(inst.gameDir) { g ->
+            File(g, "logs").mkdirs(); File(g, "logs/latest.log").writeText("loading mods\njava.lang.IllegalStateException: harmless\n")
+            Thread.sleep(900); game.alive = false
+        }
+        val r = PrismTrialRunner(game, inst, t, listOf("a.jar", "b.jar"), TrialSettings(JudgeMode.AUTO, startTimeoutSec = 5, timeoutSec = 30),
+            fingerprintOf = { CrashFingerprint("x") }, markers = markers, pollMs = 50, pidCheckMs = 100, afterStopMs = 10,
+            stallMs = 1_200, onStall = {})
+        val o = r.run(setOf("a.jar", "b.jar"))
+        assertEquals(TrialResult.HANG, o.result)
+    }
 }

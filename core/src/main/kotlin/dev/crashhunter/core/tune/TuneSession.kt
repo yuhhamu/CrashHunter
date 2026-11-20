@@ -386,6 +386,7 @@ class TuneSession(
             windowTitle = "CrashHunter - ",
             minimizeWindow = settings.minimizeGames,
             status = { st -> recorder.state(0, st); progress(TuneProgress.Bisect(BisectProgress.Log("state.$st"))) },
+            dumpDir = File(dev.crashhunter.core.util.AppDirs.dataDir, "logs"),
         )
         val n = recorder.startLocal(0, "tune-launch", enabled.size)
         val started = System.currentTimeMillis()
