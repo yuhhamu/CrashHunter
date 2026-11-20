@@ -76,6 +76,12 @@ class FixApplier(
                     backupOnce(format.componentsFile(instance))
                     format.setComponentVersion(instance, a.uid, a.version)
                 }
+                is LimitThreads -> {
+                    val f = File(instance.gameDir, "config/fml.toml")
+                    backupOnce(f)
+                    if (!f.isFile) steps += FileAdded(f.absolutePath)
+                    dev.crashhunter.core.bisect.LoadGuard.writeLimit(f)
+                }
                 is ResetConfig -> {
                     val f = File(instance.gameDir, a.path)
                     if (f.exists()) moveAside(f)

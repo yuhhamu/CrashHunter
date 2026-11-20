@@ -29,6 +29,18 @@ fun main(args: Array<String>) {
         return
     }
 
+    val scanIdx = args.indexOf("--scan")
+    if (scanIdx >= 0) {
+        val dir = File(args.getOrNull(scanIdx + 1) ?: run { System.err.println("usage: --scan <mods folder>"); exitProcess(2) })
+        val started = System.currentTimeMillis()
+        val index = dev.crashhunter.core.mods.ModIndex.load(dir)
+        val found = dev.crashhunter.core.scan.StaticScan(File(AppDirs.dataDir, "static-cache")).scan(index)
+        val name = { f: String? -> f?.let { index.byFileName(it)?.displayName ?: it } ?: "-" }
+        for (f in found) println("${f.kind}\t${name(f.file)}\t${name(f.other)}\t${f.subject}\t${f.target}")
+        println("jars: ${index.jars.count { it.enabled }}, findings: ${found.size}, ms: ${System.currentTimeMillis() - started}, heapMb: ${(Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1048576}")
+        return
+    }
+
     System.setProperty("flatlaf.uiScale.allowScaleDown", "true")
     if (isSystemDark()) FlatDarkLaf.setup() else FlatLightLaf.setup()
     WheelSpeed.install()

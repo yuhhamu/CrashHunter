@@ -136,6 +136,7 @@ class TuneEngine(
     private val enable: (files: Set<String>) -> Unit = {},
     private val resume: EngineState? = null,
     private val checkpoint: (EngineState) -> Unit = {},
+    private val stable: suspend () -> Boolean = { true },
 ) {
     private class Pending(val removed: Removed, val disabled: Set<String>)
     private val pending = mutableListOf<Pending>()
@@ -294,8 +295,9 @@ class TuneEngine(
                 when {
                     o.result == TrialResult.PASS -> {
                         carry(file, done.newFile)
-                        steps += Replaced(round, file, done.newFile, alt, found.files, true)
-                        return VersionOutcome.LAUNCHED
+                        val steady = stable()
+                        steps += Replaced(round, file, done.newFile, alt, found.files, steady)
+                        return if (steady) VersionOutcome.LAUNCHED else VersionOutcome.PROGRESS
                     }
                     newFailure -> {
                         carry(file, done.newFile)
@@ -323,7 +325,12 @@ class TuneEngine(
             listener(TuneEvent.LoaderResult(v, o.result, newFailure))
             val from = loaderNow ?: l.current
             when {
-                o.result == TrialResult.PASS -> { steps += LoaderChanged(round, l.uid, from, v, true); loaderNow = v; return VersionOutcome.LAUNCHED }
+                o.result == TrialResult.PASS -> {
+                    loaderNow = v
+                    val steady = stable()
+                    steps += LoaderChanged(round, l.uid, from, v, steady)
+                    return if (steady) VersionOutcome.LAUNCHED else VersionOutcome.PROGRESS
+                }
                 newFailure -> { steps += LoaderChanged(round, l.uid, from, v, false); loaderNow = v; return VersionOutcome.PROGRESS }
                 else -> done.undo()
             }

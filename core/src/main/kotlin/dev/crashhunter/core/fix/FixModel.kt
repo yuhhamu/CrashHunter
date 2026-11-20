@@ -19,7 +19,8 @@ enum class FixKind(val defaultOn: Boolean, val network: Boolean) {
     DB_FIX(true, true),
     LOADER_UPDATE(false, true),
     CONFIG_RESET(false, false),
-    CRASH_TOOL(true, false);
+    CRASH_TOOL(true, false),
+    LOAD_THREADS(false, false);
 
     companion object {
         fun enabledFrom(map: Map<String, Boolean>): Set<FixKind> = entries.filter { map[it.name] ?: it.defaultOn }.toSet()
@@ -80,6 +81,10 @@ data class SetComponentVersion(val uid: String, val version: String) : FixAction
 @Serializable
 @SerialName("config")
 data class ResetConfig(val path: String) : FixAction
+
+@Serializable
+@SerialName("threads")
+data object LimitThreads : FixAction
 
 @Serializable
 data class FixProposal(

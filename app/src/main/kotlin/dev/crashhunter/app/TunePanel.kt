@@ -28,6 +28,7 @@ import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Dimension
 import javax.swing.BorderFactory
+import javax.swing.JCheckBox
 import javax.swing.JComponent
 import javax.swing.JDialog
 import javax.swing.JLabel
@@ -435,7 +436,12 @@ class TunePanel(private val ctx: AppContext, private val frame: MainFrame) : JPa
     }
 
     private fun visible(step: dev.crashhunter.core.tune.TuneStep): Boolean =
-        !(step is dev.crashhunter.core.tune.Fixed && step.kind == dev.crashhunter.core.fix.FixKind.ENABLE_PROVIDER)
+        !(step is dev.crashhunter.core.tune.Fixed && (step.kind == dev.crashhunter.core.fix.FixKind.ENABLE_PROVIDER || step.kind == dev.crashhunter.core.fix.FixKind.LOAD_THREADS))
+
+    private fun threadsStep(step: dev.crashhunter.core.tune.TuneStep): Boolean =
+        step is dev.crashhunter.core.tune.Fixed && step.kind == dev.crashhunter.core.fix.FixKind.LOAD_THREADS
+
+    private var threadsBox: JCheckBox? = null
 
     private fun versionOf(file: String, fallback: String): String =
         report?.versions?.get(file) ?: fallback.removeSuffix(".jar")
@@ -600,7 +606,12 @@ class TunePanel(private val ctx: AppContext, private val frame: MainFrame) : JPa
             card.add(Ui.gap(8))
             card.add(Ui.wrapText(s.f("tune.blocked", r.result.blockedBy.joinToString(", ") { name(it) })))
         }
-        val message = if (r.result.message == dev.crashhunter.core.bisect.PRISM_UNRESPONSIVE) s["bisect.prismUnresponsive"] else r.result.message
+        val message = when (r.result.message) {
+            dev.crashhunter.core.bisect.PRISM_UNRESPONSIVE -> s["bisect.prismUnresponsive"]
+            TuneSession.UNSTABLE -> s["tune.unstable"]
+            dev.crashhunter.core.bisect.UNDECIDED -> s["tune.undecided"]
+            else -> r.result.message
+        }
         if (message.isNotBlank()) { card.add(Ui.gap(6)); card.add(Ui.wrapText(message, muted = true)) }
         card.add(Ui.gap(12))
         if (r.result.steps.none { visible(it) }) card.add(Ui.label(s["tune.noChanges"], muted = true))
@@ -613,6 +624,13 @@ class TunePanel(private val ctx: AppContext, private val frame: MainFrame) : JPa
             }
             card.add(Ui.row(JLabel(DotIcon(if (step is Removed) StatusColors.warn else StatusColors.running)), Ui.label(text), gap = 8))
             card.add(Ui.gap(4))
+        }
+        threadsBox = null
+        if (applied == null && st == TuneStatus.LAUNCHED && r.result.steps.any { threadsStep(it) }) {
+            val box = JCheckBox(s["tune.threads.option"], false).apply { isOpaque = false }
+            threadsBox = box
+            card.add(Ui.gap(6))
+            card.add(Ui.row(box, Ui.help(s["tune.threads.help"]), gap = 4))
         }
         card.add(Ui.gap(14))
         val buttons = mutableListOf<JComponent>()
@@ -635,7 +653,7 @@ class TunePanel(private val ctx: AppContext, private val frame: MainFrame) : JPa
         val ok = JOptionPane.showConfirmDialog(this, s.f("tune.apply.confirm", r.source.name), "CrashHunter", JOptionPane.OK_CANCEL_OPTION)
         if (ok != JOptionPane.OK_OPTION) return
         scope.launch {
-            val rec = withContext(Dispatchers.IO) { runCatching { ctx.fixApplier().apply(r.source, TuneSession.proposals(r.result, r.names)) } }
+            val rec = withContext(Dispatchers.IO) { runCatching { ctx.fixApplier().apply(r.source, TuneSession.proposals(r.result, r.names).filter { it.kind != dev.crashhunter.core.fix.FixKind.LOAD_THREADS || threadsBox?.isSelected == true }) } }
             rec.onSuccess { applied = it; Ui.toast(this@TunePanel, s["tune.applied"]); r.copy?.let { c -> withContext(Dispatchers.IO) { WorkCopy.delete(c.dir) } } }
                 .onFailure { JOptionPane.showMessageDialog(this@TunePanel, s.f("tune.apply.failed", it.message ?: "")) }
             showResult(r)

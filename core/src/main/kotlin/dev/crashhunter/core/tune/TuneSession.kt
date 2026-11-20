@@ -8,6 +8,7 @@ import dev.crashhunter.core.bisect.BisectProgress
 import dev.crashhunter.core.bisect.BisectSession
 import dev.crashhunter.core.bisect.BisectStatus
 import dev.crashhunter.core.bisect.JudgeMode
+import dev.crashhunter.core.bisect.LoadGuard
 import dev.crashhunter.core.bisect.ModToggler
 import dev.crashhunter.core.bisect.PrismTrialRunner
 import dev.crashhunter.core.bisect.TrialSettings
@@ -156,6 +157,8 @@ class TuneSession(
             recorder.notes += if (check == null) "db:failed" else "db:${check.known.broken.size}/${check.known.conflicts.size}/${check.known.fixes.size}/${check.crashes.size}"
             progress(TuneProgress.Db(check, (dbPre + dbPlan).flatMap { it.files }.distinct()))
         }
+        prepareSuspicion(copy)
+        val sourceSingle = LoadGuard.singleThreaded(source)
 
         val engine = TuneEngine(
             initialPolicy = fileRules.mapValues { it.value.policy },
@@ -174,7 +177,13 @@ class TuneSession(
                 fun done(f: TuneFind): TuneFind = if (fixes.isEmpty()) f else TuneFind.WithFixes(fixes.toList(), f)
                 for (attempt in 0 until 4) {
                     when (known.outcome.result) {
-                        TrialResult.PASS -> return@TuneEngine done(TuneFind.Launches)
+                        TrialResult.PASS -> {
+                            val bad = unstable(copy, controller, tracker, trialSettings, journal) ?: return@TuneEngine done(TuneFind.Launches)
+                            known = bad
+                            if (bad.outcome.result == TrialResult.START_FAILED) return@TuneEngine done(TuneFind.Stop(TuneStatus.START_FAILED, bad.outcome.note))
+                            if (bad.outcome.result == TrialResult.CANCELLED) return@TuneEngine done(TuneFind.Stop(TuneStatus.CANCELLED))
+                            continue
+                        }
                         TrialResult.START_FAILED -> return@TuneEngine done(TuneFind.Stop(TuneStatus.START_FAILED, known.outcome.note))
                         TrialResult.CANCELLED -> return@TuneEngine done(TuneFind.Stop(TuneStatus.CANCELLED))
                         else -> {}
@@ -234,7 +243,16 @@ class TuneSession(
                         break
                     }
                 }
-                if (known.outcome.result == TrialResult.PASS) return@TuneEngine done(TuneFind.Launches)
+                if (known.outcome.result == TrialResult.PASS) {
+                    val bad = unstable(copy, controller, tracker, trialSettings, journal) ?: return@TuneEngine done(TuneFind.Launches)
+                    if (bad.outcome.result != TrialResult.FAIL && bad.outcome.result != TrialResult.HANG) return@TuneEngine done(TuneFind.Stop(TuneStatus.INCONCLUSIVE, UNSTABLE))
+                    known = bad
+                }
+                staticCulprit(known, ModIndex.load(copy.modsDir))?.let { files ->
+                    triedStatic += files.sorted().joinToString("|")
+                    progress(TuneProgress.Note("staticCulprit", listOf(files.joinToString(", ") { ModIndex.load(copy.modsDir).byFileName(it)?.displayName ?: it })))
+                    return@TuneEngine done(TuneFind.Culprits(files, known.outcome.fingerprint, direct = true))
+                }
                 known.diagnosis?.let { d -> dependencyCulprit(d, ModIndex.load(copy.modsDir)) }?.let { f ->
                     triedDiagnosed += f
                     progress(TuneProgress.Note("dependency", listOf(ModIndex.load(copy.modsDir).byFileName(f)?.displayName ?: f)))
@@ -245,11 +263,29 @@ class TuneSession(
                     progress(TuneProgress.Note("diagnosed", listOf(ModIndex.load(copy.modsDir).byFileName(f)?.displayName ?: f)))
                     return@TuneEngine done(TuneFind.Culprits(listOf(f), known.outcome.fingerprint, direct = true, removable = false))
                 }
+                if (known.outcome.result == TrialResult.HANG && !LoadGuard.singleThreaded(copy) && LoadGuard.limitThreads(copy)) {
+                    progress(TuneProgress.Note("threads"))
+                    known = launchAll(copy, controller, tracker, trialSettings, journal)
+                    when (known.outcome.result) {
+                        TrialResult.PASS -> {
+                            val bad = unstable(copy, controller, tracker, trialSettings, journal) ?: return@TuneEngine done(TuneFind.Launches)
+                            if (bad.outcome.result != TrialResult.FAIL && bad.outcome.result != TrialResult.HANG) return@TuneEngine done(TuneFind.Stop(TuneStatus.INCONCLUSIVE, UNSTABLE))
+                            known = bad
+                        }
+                        TrialResult.START_FAILED -> return@TuneEngine done(TuneFind.Stop(TuneStatus.START_FAILED, known.outcome.note))
+                        TrialResult.CANCELLED -> return@TuneEngine done(TuneFind.Stop(TuneStatus.CANCELLED))
+                        else -> {}
+                    }
+                }
                 val keyNow = dev.crashhunter.core.bisect.BisectEngine.keyOf(enabledOf(copy))
                 progress(TuneProgress.Phase("search"))
                 val hang = known.outcome.result == TrialResult.HANG
-                suspend fun search() = BisectSession(launcher, copy, bisectSettings.copy(timeoutSec = adaptive(trialSettings).timeoutSec, hangIsFailure = bisectSettings.hangIsFailure || hang), diagnosisService, known.diagnosis, extraSuspects = dbSuspects(copy), inPlace = true,
-                    seed = mapOf(keyNow to known.outcome), knownPass = passSets, recorder = recorder) { p -> progress(TuneProgress.Bisect(p)) }.run()
+                if (hang) progress(TuneProgress.Note("hangMode"))
+                val total = enabledOf(copy).size
+                val seedOutcome = known.outcome
+                suspend fun search() = BisectSession(launcher, copy, bisectSettings.copy(timeoutSec = adaptive(trialSettings).timeoutSec, hangIsFailure = bisectSettings.hangIsFailure || hang), diagnosisService, known.diagnosis, extraSuspects = (dbSuspects(copy) + suspicion.top(enabledOf(copy))).distinct(), inPlace = true,
+                    seed = mapOf(keyNow to seedOutcome), knownPass = passSets, recorder = recorder,
+                    rank = { suspicion.rank(it) }, onVerdict = { set, v -> suspicion.trial(set, total, v) }, minRepeats = if (hang) 2 else 1) { p -> progress(TuneProgress.Bisect(p)) }.run()
                 var report = search()
                 var retries = 0
                 while (report.result.status == BisectStatus.START_FAILED && report.result.message == dev.crashhunter.core.bisect.PRISM_UNRESPONSIVE && retries < PRISM_RETRIES) {
@@ -263,7 +299,7 @@ class TuneSession(
                 if (report.result.status == BisectStatus.FOUND) learnConflict(report.result.culprits, report.crashDiagnosis?.fingerprint ?: known.outcome.fingerprint, report.result.trials, copy)
                 done(when (report.result.status) {
                     BisectStatus.FOUND -> TuneFind.Culprits(report.result.culprits, report.crashDiagnosis?.fingerprint ?: known.outcome.fingerprint)
-                    BisectStatus.NO_FAILURE_AT_BASELINE -> TuneFind.Launches
+                    BisectStatus.NO_FAILURE_AT_BASELINE -> if (unstable(copy, controller, tracker, trialSettings, journal) == null) TuneFind.Launches else TuneFind.Stop(TuneStatus.INCONCLUSIVE, UNSTABLE)
                     BisectStatus.NOT_A_MOD -> TuneFind.Stop(TuneStatus.NOT_A_MOD)
                     BisectStatus.START_FAILED -> TuneFind.Stop(TuneStatus.START_FAILED, report.result.message)
                     BisectStatus.CANCELLED -> TuneFind.Stop(TuneStatus.CANCELLED)
@@ -311,14 +347,22 @@ class TuneSession(
             enable = { files -> last = null; for (f in files) { val off = File(copy.modsDir, "$f.disabled"); if (off.isFile) off.renameTo(File(copy.modsDir, f)) }; remember(ModIndex.load(copy.modsDir)) },
             resume = resumed?.let { resume!!.engine },
             checkpoint = { st -> runCatching { store?.save(TuneCheckpoint(source.id, copy.dir.absolutePath, System.currentTimeMillis(), st, passSets.map { it.sorted() }, staticDone)) } },
+            stable = {
+                val bad = unstable(copy, controller, tracker, trialSettings, journal)
+                if (bad?.outcome?.result == TrialResult.CANCELLED) throw kotlinx.coroutines.CancellationException("cancelled")
+                bad == null
+            },
         )
-        val result = try {
+        val raw = try {
             engine.run()
         } catch (e: kotlinx.coroutines.CancellationException) {
             TuneResult(TuneStatus.CANCELLED, emptyList())
         } catch (e: Exception) {
             TuneResult(TuneStatus.ERROR, emptyList(), message = e.message ?: e.javaClass.simpleName)
         }
+        val result = if (raw.status == TuneStatus.LAUNCHED && !sourceSingle && LoadGuard.singleThreaded(copy))
+            raw.copy(steps = raw.steps + Fixed(raw.steps.maxOfOrNull { it.round } ?: 1, FixKind.LOAD_THREADS, "fml.toml", emptyMap(), listOf(dev.crashhunter.core.fix.LimitThreads), true))
+            else raw
         runCatching { controller.closeLaunchers(listOf(copy.id)) }
         runCatching { if (result.status in TuneResume.RESUMABLE) store?.mark(source.id, result.status, result.message) else store?.clear(source.id) }
         copyIndex = ModIndex.load(copy.modsDir)
@@ -393,6 +437,9 @@ class TuneSession(
         val o = runner.run(enabled.toSet()).also { journal.delete() }
         val took = System.currentTimeMillis() - started
         if (o.result == TrialResult.PASS) passMs = maxOf(passMs, took)
+        if (o.result == TrialResult.FAIL) o.fingerprint?.let { fp ->
+            if (namedPrints.add(fp.toString())) suspicion.named(fp.mods.mapNotNull { index.byModId(it)?.fileName }.distinct())
+        }
         recorder.done(n, o.result.name, o.fingerprint)
         return Known(dev.crashhunter.core.bisect.BisectEngine.keyOf(enabled), o, diag).also { last = it }
     }
@@ -558,8 +605,64 @@ class TuneSession(
         }.firstOrNull { it !in triedDiagnosed }
 
     private fun diagnosedCulprit(d: dev.crashhunter.core.analyze.Diagnosis, index: ModIndex): String? =
-        d.findings.filter { it.cause in DIAGNOSED && it.jar != null }.mapNotNull { f -> index.byFileName(f.jar!!)?.takeIf { it.enabled }?.fileName }
+        suspicion.rank(d.findings.filter { it.cause in DIAGNOSED && it.jar != null }.mapNotNull { f -> index.byFileName(f.jar!!)?.takeIf { it.enabled }?.fileName }.distinct())
             .firstOrNull { it !in triedDiagnosed }
+
+    val suspicion = Suspicion()
+    var staticFindings: List<dev.crashhunter.core.scan.StaticFinding> = emptyList()
+        private set
+    private val triedStatic = HashSet<String>()
+    private val namedPrints = HashSet<String>()
+
+    private fun prepareSuspicion(copy: GameInstance) {
+        progress(TuneProgress.Phase("scan"))
+        val index = ModIndex.load(copy.modsDir)
+        staticFindings = runCatching { dev.crashhunter.core.scan.StaticScan(File(AppDirs.dataDir, "static-cache")).scan(index) }.getOrDefault(emptyList())
+        suspicion.fromStatic(staticFindings)
+        val enabled = index.jars.filter { it.enabled }.map { it.fileName }.toSet()
+        val confirmed = dbPre.flatMap { it.files }
+        val plan = dbPlan.flatMap { it.files }
+        val known = known(copy, index)
+        val conflicts = (plan + known.filter { it.cause == Cause.KNOWN_CONFLICT || it.cause == Cause.KNOWN_BROKEN }.mapNotNull { it.jar }).distinct()
+        val fixes = known.filter { it.cause == Cause.KNOWN_FIX }.mapNotNull { it.jar }
+        val crashes = dbSuspects(copy) - conflicts.toSet()
+        suspicion.fromDb(confirmed.filter { it in enabled }, conflicts.filter { it in enabled }, fixes.filter { it in enabled }, crashes.filter { it in enabled })
+        recorder.notes += "static:${staticFindings.size}"
+        progress(TuneProgress.Note("scan", listOf(staticFindings.count { it.kind != dev.crashhunter.core.scan.StaticKind.DUPLICATE_CLASS }.toString())))
+        val top = suspicion.top(enabled, limit = 5)
+        if (top.isNotEmpty()) progress(TuneProgress.Note("suspects", listOf(top.joinToString(", ") { index.byFileName(it)?.displayName ?: it })))
+    }
+
+    private fun staticCulprit(known: Known, index: ModIndex): List<String>? {
+        if (known.outcome.result != TrialResult.FAIL) return null
+        val fp = known.outcome.fingerprint ?: return null
+        val d = known.diagnosis
+        val text = listOfNotNull(fp.exception, fp.message, d?.title, d?.detail, d?.parsed?.effectiveMessage).joinToString("\n") + "\n" + fp.frames.joinToString("\n")
+        val named = (fp.mods.mapNotNull { index.byModId(it)?.fileName } + d?.suspects.orEmpty().take(3).mapNotNull { it.jar }).toSet()
+        val mismatch = fp.exception == "cause:CLASS_MISMATCH" || MISMATCH_NAMES.any { fp.exception.endsWith(it) || text.contains(it) }
+        val enabled = index.jars.filter { it.enabled }.map { it.fileName }.toSet()
+        val hits = staticFindings.filter { f -> f.kind != dev.crashhunter.core.scan.StaticKind.DUPLICATE_CLASS && f.files.all { it in enabled } }.filter { f ->
+            f.classes.any { c -> text.contains(c) || (c.length > 8 && text.contains(c.substringAfterLast('.'))) } || (mismatch && f.files.any { it in named })
+        }
+        for (f in hits.sortedByDescending { it.kind.weight }) {
+            val files = suspicion.rank(f.files)
+            if (files.sorted().joinToString("|") in triedStatic) continue
+            return files
+        }
+        return null
+    }
+
+    private suspend fun unstable(copy: GameInstance, controller: dev.crashhunter.core.launcher.GameLauncher, tracker: GameTracker, trialSettings: TrialSettings, journal: File): Known? {
+        for (i in 2..STABLE_RUNS) {
+            progress(TuneProgress.Note("stable", listOf(i.toString(), STABLE_RUNS.toString())))
+            val k = launchAll(copy, controller, tracker, trialSettings, journal)
+            if (k.outcome.result != TrialResult.PASS) {
+                progress(TuneProgress.Note("unstable", listOf(i.toString())))
+                return k
+            }
+        }
+        return null
+    }
 
     private suspend fun staticFixes(round: Int, copy: GameInstance, fileRules: Map<String, ModRule>): List<TuneStep> {
         val plan = planner ?: return emptyList()
@@ -600,6 +703,9 @@ class TuneSession(
 
     companion object {
         const val MAX_DB_CANDIDATES = 3
+        var STABLE_RUNS = 6
+        const val UNSTABLE = "unstable"
+        val MISMATCH_NAMES = listOf("IncompatibleClassChangeError", "NoSuchMethodError", "NoSuchFieldError", "AbstractMethodError", "NoClassDefFoundError", "VerifyError", "overrides final method")
         const val MIN_TIMEOUT_SEC = 180
         const val PRISM_RETRIES = 2
         var PRISM_WAIT_MS = 20_000L

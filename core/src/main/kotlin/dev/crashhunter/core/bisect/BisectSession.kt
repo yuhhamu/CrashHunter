@@ -44,6 +44,9 @@ class BisectSession(
     private val seed: Map<String, TrialOutcome> = emptyMap(),
     private val knownPass: MutableList<Set<String>> = mutableListOf(),
     private val recorder: dev.crashhunter.core.db.RunRecorder? = null,
+    private val rank: ((List<String>) -> List<String>)? = null,
+    private val onVerdict: (Set<String>, Verdict) -> Unit = { _, _ -> },
+    private val minRepeats: Int = 1,
     private val progress: (BisectProgress) -> Unit = {},
 ) {
     private val runLog = File(AppDirs.logDir, "bisect-${java.text.SimpleDateFormat("yyyyMMdd-HHmmss").format(java.util.Date())}.log")
@@ -88,7 +91,7 @@ class BisectSession(
         toggler.save(journal)
 
         val suspects = ((diagnosis?.suspects?.mapNotNull { s -> s.jar?.let { j -> index.byFileName(j)?.fileName } } ?: emptyList()) +
-            extraSuspects.mapNotNull { index.byFileName(it)?.fileName }).distinct().filter { it in candidates }
+            extraSuspects.mapNotNull { index.byFileName(it)?.fileName }).distinct().filter { it in candidates }.let { rank?.invoke(it) ?: it }
         fun nameOf(f: String) = index.byFileName(f)?.displayName ?: f
         fun names(list: Collection<String>) = list.joinToString(", ") { nameOf(it) }
         event("mods", candidates.size)
@@ -182,7 +185,8 @@ class BisectSession(
             target = if (settings.anyCrash || settings.manualJudge) null else diagnosis?.fingerprint,
             anyCrash = settings.anyCrash || settings.manualJudge,
             hangIsFailure = settings.hangIsFailure,
-            repeats = settings.repeats,
+            repeats = maxOf(settings.repeats, minRepeats),
+            onVerdict = onVerdict,
             cache = cache,
             extraRunners = extras,
             knownPass = knownPass,
@@ -228,6 +232,7 @@ class BisectSession(
             event("restore", n)
         }
         if (engine.inferred > 0) event("inferred", engine.inferred)
+        if (engine.unknowns > 0) event("unknowns", engine.unknowns)
         log("result ${result.status} culprits=${result.culprits} requirements=${result.requirements} trials=${result.trials} ${result.message}")
         event("result.${result.status}", names(result.culprits), result.trials)
         val byName = index.jars.associateBy { it.fileName }

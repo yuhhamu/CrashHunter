@@ -14,6 +14,7 @@ enum class TrialResult { PASS, FAIL, HANG, START_FAILED, CANCELLED }
 const val PRISM_UNRESPONSIVE = "prismUnresponsive"
 const val STALLED = "stalled"
 const val INFERRED = "inferred"
+const val UNDECIDED = "undecided"
 
 @Serializable
 data class TrialOutcome(
@@ -26,6 +27,8 @@ data class TrialOutcome(
 fun interface TrialRunner {
     suspend fun run(enabled: Set<String>): TrialOutcome
 }
+
+enum class Verdict { REPRO, PASS, UNKNOWN }
 
 enum class BisectStatus { FOUND, NO_FAILURE_AT_BASELINE, NOT_A_MOD, START_FAILED, INCONCLUSIVE, CANCELLED, ERROR }
 
@@ -53,7 +56,12 @@ class BisectEngine(
     private val listener: (TrialEvent) -> Unit = {},
     private val extraRunners: List<TrialRunner> = emptyList(),
     val knownPass: MutableList<Set<String>> = mutableListOf(),
+    private val onVerdict: (Set<String>, Verdict) -> Unit = { _, _ -> },
+    private val maxUnknown: Int = 8,
 ) {
+    @Volatile var unknowns = 0
+        private set
+    private var targetHang = false
     @Volatile var inferred = 0
         private set
 
@@ -119,6 +127,7 @@ class BisectEngine(
             chunk.forEachIndexed { i, (k, set) ->
                 cache[k] = outs[i]
                 if (outs[i].result == TrialResult.PASS) rememberPass(set)
+                if (target != null || targetHang || anyCrash) runCatching { onVerdict(set, verdict(outs[i])) }
             }
         }
         return sets.map { cache[key(it)]!! }
@@ -134,20 +143,36 @@ class BisectEngine(
 
     private fun req(subset: Collection<String>): Set<String> = withRequirements(subset).filter { it in candidateSet }.toSet()
 
-    private fun reproduced(o: TrialOutcome): Boolean = when (o.result) {
-        TrialResult.FAIL -> {
-            val t = target
-            val fp = o.fingerprint
-            val same = anyCrash || t == null || fp == null || StackTraceTools.sameFailure(t, fp)
-            if (!same) otherCrash = true
-            same
+    fun verdict(o: TrialOutcome): Verdict = when (o.result) {
+        TrialResult.PASS -> Verdict.PASS
+        TrialResult.FAIL -> when {
+            anyCrash -> Verdict.REPRO
+            targetHang -> { otherCrash = true; Verdict.UNKNOWN }
+            else -> {
+                val t = target
+                val fp = o.fingerprint
+                if (t == null || fp == null || StackTraceTools.sameFailure(t, fp)) Verdict.REPRO else { otherCrash = true; Verdict.UNKNOWN }
+            }
         }
-        TrialResult.HANG -> hangIsFailure
-        else -> false
+        TrialResult.HANG -> if (targetHang || hangIsFailure) Verdict.REPRO else Verdict.UNKNOWN
+        else -> Verdict.UNKNOWN
     }
 
-    private suspend fun fails(subset: Collection<String>, phase: String): Boolean =
-        reproduced(runSet(req(subset), phase))
+    private fun reproduced(o: TrialOutcome): Boolean = verdict(o) == Verdict.REPRO
+
+    private suspend fun confirms(subset: Collection<String>): Boolean {
+        repeat(2) {
+            val o = runSet(req(subset), "confirm")
+            when (verdict(o)) {
+                Verdict.REPRO -> return true
+                Verdict.PASS -> return false
+                Verdict.UNKNOWN -> { unknowns++; cache.remove(key(req(subset))) }
+            }
+        }
+        return false
+    }
+
+    private class Undecided(val range: List<String>) : RuntimeException()
 
     private class StartFailure(val note: String) : RuntimeException(note)
 
@@ -161,14 +186,22 @@ class BisectEngine(
 
     private suspend fun runInner(): BisectResult {
         if (runners.size > 1) runBatch(listOf(candidateSet, emptySet()), "baseline")
-        val base = runSet(candidateSet, "baseline")
+        var base = runSet(candidateSet, "baseline")
+        var again = 0
+        while (again < 2 && (base.result == TrialResult.HANG && !hangIsFailure ||
+                base.result == TrialResult.FAIL && !anyCrash && target != null && base.fingerprint != null && !StackTraceTools.sameFailure(target!!, base.fingerprint!!))) {
+            again++
+            cache.remove(key(candidateSet))
+            base = runSet(candidateSet, "baseline")
+        }
         when (base.result) {
             TrialResult.PASS -> return BisectResult(BisectStatus.NO_FAILURE_AT_BASELINE, trials = trials)
             TrialResult.START_FAILED -> return BisectResult(BisectStatus.START_FAILED, trials = trials, message = base.note)
             TrialResult.HANG -> if (!hangIsFailure) return BisectResult(BisectStatus.INCONCLUSIVE, trials = trials, message = base.note)
             else -> {}
         }
-        if (target == null) target = base.fingerprint
+        targetHang = base.result == TrialResult.HANG
+        if (target == null && !targetHang) target = base.fingerprint
         if (!reproduced(base)) return BisectResult(BisectStatus.NO_FAILURE_AT_BASELINE, trials = trials, message = base.note, otherCrashSeen = true)
 
         val none = runSet(emptySet(), "without-mods")
@@ -176,9 +209,13 @@ class BisectEngine(
         if (reproduced(none)) return BisectResult(BisectStatus.NOT_A_MOD, trials = trials)
 
         val order = dependenciesFirst(suspects.filter { it in candidateSet } + candidates.filter { it !in suspects })
-        val minimal = findCulprits(order, suspects.count { it in candidateSet })
+        val minimal = try {
+            findCulprits(order, suspects.count { it in candidateSet })
+        } catch (e: Undecided) {
+            return BisectResult(BisectStatus.INCONCLUSIVE, e.range, trials = trials, otherCrashSeen = otherCrash, message = UNDECIDED)
+        }
         pool = minimal.size
-        val confirmed = minimal.isNotEmpty() && fails(minimal, "confirm")
+        val confirmed = minimal.isNotEmpty() && confirms(minimal)
         if (!confirmed) return BisectResult(BisectStatus.INCONCLUSIVE, minimal, trials = trials, otherCrashSeen = otherCrash,
             message = "flaky")
         val req = withRequirements(minimal).filter { it in candidateSet && it !in minimal }
@@ -233,28 +270,72 @@ class BisectEngine(
         var hi = rest.size
         var extra = (if (lo < 0) listOf(0) else emptyList()) + hints.filter { it in (lo + 1) until hi }
         extra = extra.distinct().sorted()
+        val unknownAt = HashSet<Int>()
+        var misses = 0
+        var jumped = -1
+        val once = HashSet<Int>()
         while (hi - lo > 1) {
             pool = hi - maxOf(lo, 0)
             focus = fixed.toList() + rest.subList(maxOf(lo, 0), hi)
             project(hi - lo)
-            val firstPoints = extra.take(runners.size)
+            val lowest = unknownAt.filter { it in (lo + 1) until hi }.minOrNull()
+            if ((hi - 1) in unknownAt && jumped != hi && lowest == lo + 1) {
+                jumped = hi
+                if (verdict(runSet(req(fixed + rest.subList(0, maxOf(lo, 0)) + rest[hi - 1]), "search")) == Verdict.REPRO) return hi
+            }
+            val firstPoints = extra.filter { it !in unknownAt }.take(runners.size)
             extra = emptyList()
             val free = runners.size - firstPoints.size
-            val evenLo = if (firstPoints.isEmpty()) lo else maxOf(lo, firstPoints.max())
-            val span = hi - evenLo
+            val (gapLo, gapHi) = gap(lo, hi, unknownAt)
+            val evenLo = if (firstPoints.isEmpty()) gapLo else maxOf(gapLo, firstPoints.max())
+            val span = gapHi - evenLo
             val even = if (free <= 0 || span <= 1) emptyList() else (1..free).map { j -> evenLo + (span.toLong() * j / (free + 1)).toInt() }
-                .map { it.coerceIn(evenLo + 1, hi - 1) }
-            val points = (firstPoints + even).filter { it in (lo + 1) until hi }.distinct().sorted()
+                .map { it.coerceIn(evenLo + 1, gapHi - 1) }
+            val taken = HashSet<Int>()
+            val points = (firstPoints + even).mapNotNull { p -> nearestFree(p, lo, hi, unknownAt, taken)?.also { taken += it } }.distinct().sorted()
+            if (points.isEmpty()) {
+                if (jumped != hi && hi in 1..rest.size && verdict(runSet(req(fixed + rest.subList(0, maxOf(lo, 0)) + rest[hi - 1]), "search")) == Verdict.REPRO) return hi
+                throw Undecided(fixed.toList() + rest.subList(maxOf(lo, 0), hi))
+            }
             val sets = points.map { req(fixed + rest.subList(0, maxOf(0, it))) }
             val outs = runBatch(sets, "search")
+            val verdicts = outs.map { verdict(it) }
             var newHi = hi
             var newLo = lo
-            points.forEachIndexed { i, pt -> if (reproduced(outs[i])) { if (pt < newHi) newHi = pt } }
-            points.forEachIndexed { i, pt -> if (!reproduced(outs[i]) && pt < newHi && pt > newLo) newLo = pt }
+            points.forEachIndexed { i, pt -> if (verdicts[i] == Verdict.REPRO && pt < newHi) newHi = pt }
+            points.forEachIndexed { i, pt -> if (verdicts[i] == Verdict.PASS && pt < newHi && pt > newLo) newLo = pt }
+            points.forEachIndexed { i, pt ->
+                if (verdicts[i] != Verdict.UNKNOWN) return@forEachIndexed
+                unknowns++
+                misses++
+                if (once.add(pt)) cache.remove(key(sets[i])) else unknownAt += pt
+            }
+            if (misses > maxUnknown) throw Undecided(fixed.toList() + rest.subList(maxOf(newLo, 0), newHi))
             hi = newHi
             lo = newLo
         }
         return hi
+    }
+
+    private fun gap(lo: Int, hi: Int, unknownAt: Set<Int>): Pair<Int, Int> {
+        val inside = unknownAt.filter { it in (lo + 1) until hi }.sorted()
+        if (inside.isEmpty()) return lo to hi
+        val top = inside.last()
+        if (hi - top > 1) return top to hi
+        if (inside.first() - lo > 1) return lo to inside.first()
+        val bars = listOf(lo) + inside + hi
+        return bars.zipWithNext().filter { (a, b) -> b - a > 1 }.maxByOrNull { (a, b) -> b - a } ?: (lo to hi)
+    }
+
+    private fun nearestFree(p: Int, lo: Int, hi: Int, bad: Set<Int>, taken: Set<Int>): Int? {
+        val min = lo + 1
+        val max = hi - 1
+        if (min > max) return null
+        val start = p.coerceIn(min, max)
+        for (d in 0..(max - min)) {
+            for (c in listOf(start - d, start + d)) if (c in min..max && c !in bad && c !in taken) return c
+        }
+        return null
     }
 
 }

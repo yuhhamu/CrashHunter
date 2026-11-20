@@ -174,7 +174,7 @@ class SettingsPanel(private val ctx: AppContext, private val frame: MainFrame) :
             return check(s["settings.fix.${k.name}"], on, help) { v -> ctx.update { it.copy(fixKinds = it.fixKinds + (k.name to v)) } }
         }
         box.add(Ui.label(s["settings.fixes.local"], 11f, muted = true))
-        FixKind.entries.filter { !it.network }.forEach { box.add(kindCheck(it)) }
+        FixKind.entries.filter { !it.network && it != FixKind.LOAD_THREADS }.forEach { box.add(kindCheck(it)) }
         box.add(Ui.gap(8))
         box.add(Ui.label(s["settings.fixes.network"], 11f, muted = true))
         FixKind.entries.filter { it.network }.forEach { box.add(kindCheck(it)) }

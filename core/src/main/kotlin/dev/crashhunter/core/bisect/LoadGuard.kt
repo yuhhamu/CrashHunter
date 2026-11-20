@@ -17,7 +17,10 @@ object LoadGuard {
 
     fun limitThreads(instance: GameInstance): Boolean {
         if (!WorkCopy.isWorkCopy(instance.dir)) return false
-        val f = File(instance.gameDir, "config/fml.toml")
+        return writeLimit(File(instance.gameDir, "config/fml.toml"))
+    }
+
+    fun writeLimit(f: File): Boolean {
         val old = if (f.isFile) f.readText() else ""
         val next = when {
             MAX_THREADS.containsMatchIn(old) -> MAX_THREADS.replace(old) { it.groupValues[1] + "1" }
