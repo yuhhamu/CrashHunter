@@ -2,7 +2,8 @@ package dev.crashhunter.core.util
 
 object Redactor {
     private val rules = listOf(
-        Regex("""(?i)([A-Z]:[\\/](?:Users|Documents and Settings)[\\/])([^\\/\s]+)""") to "$1<user>",
+        Regex("""(?i)([A-Z]:[\\/](?:Users|Documents and Settings)[\\/])((?:[^\\/\r\n:*?"<>|]+(?=[\\/]))|[^\\/\s]+)""") to "$1<user>",
+        Regex("""(?:\\\\|(?<![:\w])//)[^\\/\s]+[\\/][^\\/\r\n:*?"<>|]+""") to "<share>",
         Regex("""(/(?:home|Users)/)([^/\s]+)""") to "$1<user>",
         Regex("""(?i)(--accessToken\s+)\S+""") to "$1<token>",
         Regex("""(?i)(--uuid\s+)\S+""") to "$1<uuid>",

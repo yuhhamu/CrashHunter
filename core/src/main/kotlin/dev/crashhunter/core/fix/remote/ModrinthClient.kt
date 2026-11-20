@@ -24,13 +24,19 @@ data class MrVersion(
 )
 
 @Serializable
-data class MrProject(val id: String, val slug: String = "", val title: String = "", @SerialName("project_type") val projectType: String = "mod")
+data class MrProject(val id: String, val slug: String = "", val title: String = "", @SerialName("project_type") val projectType: String = "mod", val author: String = "")
+
+@Serializable
+data class MrMember(val role: String = "", val user: MrUser = MrUser())
+
+@Serializable
+data class MrUser(val username: String = "")
 
 @Serializable
 private data class MrSearch(val hits: List<MrHit> = emptyList())
 
 @Serializable
-private data class MrHit(@SerialName("project_id") val projectId: String, val slug: String = "", val title: String = "")
+private data class MrHit(@SerialName("project_id") val projectId: String, val slug: String = "", val title: String = "", val author: String = "")
 
 class ModrinthClient(private val http: Http, private val base: String = "https://api.modrinth.com/v2") {
     suspend fun versionFromSha1(sha1: String): MrVersion? = notFoundAsNull {
@@ -40,6 +46,11 @@ class ModrinthClient(private val http: Http, private val base: String = "https:/
     suspend fun project(idOrSlug: String): MrProject? = notFoundAsNull {
         http.json.decodeFromString(MrProject.serializer(), http.get("$base/project/${Http.enc(idOrSlug)}"))
     }
+
+    suspend fun owner(projectId: String): String? = runCatching {
+        val members = http.json.decodeFromString(ListSerializer(MrMember.serializer()), http.get("$base/project/${Http.enc(projectId)}/members"))
+        (members.firstOrNull { it.role.equals("Owner", true) } ?: members.firstOrNull())?.user?.username?.ifBlank { null }
+    }.getOrNull()
 
     suspend fun versions(projectId: String, profile: GameProfile): List<MrVersion> {
         val loaders = loadersFor(profile.loader)
@@ -54,7 +65,7 @@ class ModrinthClient(private val http: Http, private val base: String = "https:/
         val loaderFacet = loadersFor(profile.loader).joinToString(",") { "\"categories:$it\"" }
         val facets = "[[${loaderFacet}],[\"versions:$mc\"],[\"project_type:mod\"]]"
         val text = http.get("$base/search?limit=5&query=${Http.enc(query)}&facets=${Http.enc(facets)}")
-        return http.json.decodeFromString(MrSearch.serializer(), text).hits.map { MrProject(it.projectId, it.slug, it.title) }
+        return http.json.decodeFromString(MrSearch.serializer(), text).hits.map { MrProject(it.projectId, it.slug, it.title, author = it.author) }
     }
 
     companion object {
@@ -68,10 +79,10 @@ class ModrinthClient(private val http: Http, private val base: String = "https:/
 
         private fun rank(type: String) = when (type) { "release" -> 0; "beta" -> 1; else -> 2 }
 
-        fun toRemote(v: MrVersion, slug: String?): RemoteFile? {
+        fun toRemote(v: MrVersion, slug: String?, name: String? = null, author: String? = null): RemoteFile? {
             val f = v.files.firstOrNull { it.primary } ?: v.files.firstOrNull { it.filename.endsWith(".jar") } ?: return null
             return RemoteFile(RemoteSource.MODRINTH, f.filename, f.url, f.hashes["sha1"], f.hashes["sha512"], v.projectId, v.id, v.versionNumber,
-                "https://modrinth.com/mod/${slug ?: v.projectId}")
+                "https://modrinth.com/mod/${slug ?: v.projectId}", name?.ifBlank { null }, author?.ifBlank { null })
         }
     }
 }

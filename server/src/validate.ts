@@ -34,8 +34,12 @@ const SOURCES = new Set(["crash-report", "hs_err", "log"]);
 
 export function scrub(s: string, max: number): string {
   return s
-    .replace(/[A-Za-z]:[\\/][^\s"']*/g, "<path>")
+    .replace(/(?:\\\\|(?<![:\w])\/\/)[^\\/\s]+[\\/](?:[^\\/:*?"<>|\r\n]+[\\/])*[^\\/:*?"<>|\r\n\s]*/g, "<path>")
+    .replace(/(?<![A-Za-z0-9])[A-Za-z]:[\\/](?:[^\\/:*?"<>|\r\n]+[\\/])*[^\\/:*?"<>|\r\n\s]*/g, "<path>")
     .replace(/(?:\/(?:Users|home|mnt|var|tmp|opt)\/)[^\s"']*/gi, "<path>")
+    .replace(/(--(?:accessToken|uuid|username|xuid|clientId)\s+)\S+/gi, "$1<id>")
+    .replace(/\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g, "<uuid>")
+    .replace(/(?<![\w.\-])(?:\d{1,3}\.){3}\d{1,3}(?![\w.\-])/g, "<ip>")
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "")
     .slice(0, max);
 }

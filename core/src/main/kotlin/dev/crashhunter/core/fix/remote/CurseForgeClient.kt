@@ -28,7 +28,10 @@ data class CfFile(
 data class CfLinks(val websiteUrl: String? = null)
 
 @Serializable
-data class CfMod(val id: Long, val name: String = "", val slug: String = "", val allowModDistribution: Boolean? = null, val links: CfLinks? = null)
+data class CfMod(val id: Long, val name: String = "", val slug: String = "", val allowModDistribution: Boolean? = null, val links: CfLinks? = null, val authors: List<CfAuthor> = emptyList())
+
+@Serializable
+data class CfAuthor(val name: String = "")
 
 @Serializable
 private data class CfData<T>(val data: T)
@@ -146,6 +149,7 @@ class CurseForgeClient(private val http: Http, private val keys: CurseForgeKeys,
         fun pageUrl(mod: CfMod?, modId: Long): String = mod?.links?.websiteUrl ?: "https://www.curseforge.com/projects/$modId"
 
         fun toRemote(f: CfFile, mod: CfMod?): RemoteFile = RemoteFile(RemoteSource.CURSEFORGE, f.fileName, f.downloadUrl,
-            f.hashes.firstOrNull { it.algo == 1 }?.value, null, f.modId.toString(), f.id.toString(), f.displayName.ifBlank { f.fileName }, pageUrl(mod, f.modId))
+            f.hashes.firstOrNull { it.algo == 1 }?.value, null, f.modId.toString(), f.id.toString(), f.displayName.ifBlank { f.fileName }, pageUrl(mod, f.modId),
+            mod?.name?.ifBlank { null }, mod?.authors?.firstOrNull()?.name?.ifBlank { null })
     }
 }

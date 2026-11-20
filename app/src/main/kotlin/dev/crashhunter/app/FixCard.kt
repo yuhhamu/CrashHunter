@@ -83,10 +83,17 @@ class FixCard(
         revalidate(); repaint()
     }
 
+    private fun addLine(r: dev.crashhunter.core.fix.RemoteFile): String {
+        val source = if (r.source == dev.crashhunter.core.fix.RemoteSource.MODRINTH) "Modrinth" else "CurseForge"
+        return ctx.strings.f("fix.add.line", r.projectName ?: r.fileName, r.author ?: ctx.strings["fix.add.unknown"], source)
+    }
+
     private fun applySelected() {
         val chosen = checks.filter { it.first.isSelected }.map { it.second }
         if (chosen.isEmpty() || ctx.fixRunning) return
         if (chosen.any { it.kind == FixKind.CULPRIT } && !Ui.confirm(this, ctx.strings["fix.culprit.confirm"])) return
+        val adds = chosen.filter { it.kind == FixKind.ADD_DEPENDENCY }.flatMap { p -> p.actions.mapNotNull { (it as? dev.crashhunter.core.fix.AddMod)?.candidates?.firstOrNull() } }
+        if (adds.isNotEmpty() && !Ui.confirm(this, ctx.strings.f("fix.add.confirm", adds.joinToString("\n") { addLine(it) }))) return
         val unhashed = chosen.flatMap { p -> p.actions.flatMap { a -> (a as? dev.crashhunter.core.fix.AddMod)?.candidates ?: (a as? dev.crashhunter.core.fix.ReplaceMod)?.candidates ?: emptyList() } }
             .filter { it.sha1 == null && it.sha512 == null }
         val allowUnhashed = unhashed.isNotEmpty() && Ui.confirm(this, ctx.strings.f("fix.unhashed.confirm", unhashed.joinToString(", ") { it.fileName }))

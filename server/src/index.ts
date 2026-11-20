@@ -19,6 +19,7 @@ export interface Bindings {
   ACCESS_TEAM?: string;
   ACCESS_AUD?: string;
   ACCESS_JWKS?: string;
+  SNAP_SIGN_KEY?: string;
 }
 
 const MC = /^[0-9a-z.\-]{1,24}$/i;
@@ -173,11 +174,39 @@ function emptySnapshot(mc: string, loader: string): Snapshot {
   return { schema: 1, mc, loader, generated: 0, conflicts: [], fixes: [], broken: [] };
 }
 
+let signKey: Promise<CryptoKey> | null = null;
+let signKeySource = "";
+
+function snapKey(env: Bindings): Promise<CryptoKey> | null {
+  const b64 = env.SNAP_SIGN_KEY?.trim();
+  if (!b64) return null;
+  if (!signKey || signKeySource !== b64) {
+    signKeySource = b64;
+    const der = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    signKey = crypto.subtle.importKey("pkcs8", der, { name: "Ed25519" }, false, ["sign"]) as Promise<CryptoKey>;
+  }
+  return signKey;
+}
+
+export async function signSnapshot(env: Bindings, data: string): Promise<{ data: string; sig: string } | null> {
+  const k = snapKey(env);
+  if (!k) return null;
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, await k, new TextEncoder().encode(data)));
+  let bin = "";
+  for (const b of sig) bin += String.fromCharCode(b);
+  return { data, sig: btoa(bin) };
+}
+
 async function getSnapshot(req: Request, env: Bindings, url: URL): Promise<Response> {
   if (!appOk(req, env)) return error(401, "token");
   const mc = url.searchParams.get("mc") ?? "", loader = url.searchParams.get("loader") ?? "";
   if (!MC.test(mc) || !LOADER.test(loader)) return error(400, "env");
   const { value, metadata } = await env.SNAP.getWithMetadata<{ generated: number }>(`snap/${mc}/${loader}`);
+  if (url.searchParams.get("signed") === "1") {
+    const env2 = await signSnapshot(env, value ?? JSON.stringify(emptySnapshot(mc, loader)));
+    if (!env2) return error(503, "unsigned");
+    return new Response(JSON.stringify(env2), { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "max-age=600" } });
+  }
   if (!value) return json(emptySnapshot(mc, loader));
   const etag = `"${metadata?.generated ?? 0}"`;
   if (req.headers.get("if-none-match") === etag) return new Response(null, { status: 304, headers: { etag } });

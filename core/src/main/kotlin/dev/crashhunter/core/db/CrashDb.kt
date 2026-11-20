@@ -7,6 +7,8 @@ import dev.crashhunter.core.fix.remote.HttpStatusException
 import dev.crashhunter.core.model.GameProfile
 import dev.crashhunter.core.mods.ModIndex
 import dev.crashhunter.core.mods.ModJar
+import dev.crashhunter.core.util.Ed25519
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
 
@@ -15,6 +17,7 @@ class CrashDb(
     private val http: Http?,
     private val endpoint: () -> String,
     private val token: () -> String?,
+    private val snapKeys: List<String> = SNAP_KEYS,
 ) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = false; classDiscriminator = "type" }
     private val pretty = Json { ignoreUnknownKeys = true; encodeDefaults = false; prettyPrint = true; classDiscriminator = "type" }
@@ -128,8 +131,9 @@ class CrashDb(
         if (cached != null && System.currentTimeMillis() - f.lastModified() < maxAgeMs) return cached
         val h = http ?: return cached
         return try {
-            val text = h.get("${endpoint().trimEnd('/')}/v1/snapshot?mc=${Http.enc(env.mc)}&loader=${Http.enc(env.loader)}", headers())
-            val s = json.decodeFromString(DbSnapshot.serializer(), text)
+            val text = h.get("${endpoint().trimEnd('/')}/v1/snapshot?mc=${Http.enc(env.mc)}&loader=${Http.enc(env.loader)}&signed=1", headers())
+            val s = open(text, env.mc, env.loader) ?: return cached
+            if (cached != null && s.generated < cached.generated) return cached
             dir.mkdirs()
             f.writeText(text)
             s
@@ -141,13 +145,23 @@ class CrashDb(
     fun snapshot(profile: GameProfile): DbSnapshot? {
         val env = DbRefs.env(profile) ?: return null
         val f = snapFile(env.mc, env.loader)
-        return if (f.isFile) runCatching { json.decodeFromString(DbSnapshot.serializer(), f.readText()) }.getOrNull() else null
+        return if (f.isFile) runCatching { open(f.readText(), env.mc, env.loader) }.getOrNull() else null
+    }
+
+    private fun open(text: String, mc: String, loader: String): DbSnapshot? {
+        val e = runCatching { json.decodeFromString(SignedSnapshot.serializer(), text) }.getOrNull() ?: return null
+        val bytes = e.data.toByteArray(Charsets.UTF_8)
+        if (snapKeys.none { Ed25519.verify(bytes, e.sig, it) }) return null
+        val s = runCatching { json.decodeFromString(DbSnapshot.serializer(), e.data) }.getOrNull() ?: return null
+        return s.takeIf { it.mc == mc && it.loader == loader }
     }
 
     fun clearSnapshots() { dir.listFiles { f -> f.name.startsWith("snapshot-") }?.forEach { it.delete() } }
 
     companion object {
-        fun knowledge(snap: DbSnapshot?, index: ModIndex): List<Finding> {
+        const val MIN_INSTALLS = 2
+
+        fun knowledge(snap: DbSnapshot?, index: ModIndex, minInstalls: Int = MIN_INSTALLS): List<Finding> {
             snap ?: return emptyList()
             val enabled = index.jars.filter { it.enabled }
             val hashes = HashMap<ModJar, String?>()
@@ -155,10 +169,12 @@ class CrashDb(
             fun find(ref: ModRef): ModJar? = enabled.firstOrNull { DbRefs.matches(ref, it) { hash(it) } > 0 }
             val out = mutableListOf<Finding>()
             for (b in snap.broken.sortedByDescending { it.w }) {
+                if (!b.confirmed && b.n < minInstalls) continue
                 val j = find(b.mod) ?: continue
                 out += Finding(Cause.KNOWN_BROKEN, j.displayName, b.reason, actual = b.n.toString(), line = "db", jar = j.fileName)
             }
             for (f in snap.fixes.sortedByDescending { it.w }) {
+                if (f.n < minInstalls) continue
                 val from = f.from.singleOrNull() ?: continue
                 val to = f.to.singleOrNull() ?: continue
                 if (!from.id.equals(to.id, true) || to.v == null) continue
@@ -167,6 +183,7 @@ class CrashDb(
                 out += Finding(Cause.KNOWN_FIX, j.displayName, to.v, actual = f.n.toString(), line = "db", jar = j.fileName)
             }
             for (c in snap.conflicts.sortedByDescending { it.w }) {
+                if (c.n < minInstalls) continue
                 val jars = c.mods.map { find(it) ?: return@map null }
                 if (jars.any { it == null } || jars.isEmpty()) continue
                 val js = jars.filterNotNull()
@@ -178,6 +195,11 @@ class CrashDb(
         }
 
         fun suspects(snap: DbSnapshot?, index: ModIndex): List<String> =
-            knowledge(snap, index).filter { it.cause == Cause.KNOWN_CONFLICT || it.cause == Cause.KNOWN_BROKEN }.mapNotNull { it.jar }.distinct()
+            knowledge(snap, index, 1).filter { it.cause == Cause.KNOWN_CONFLICT || it.cause == Cause.KNOWN_BROKEN }.mapNotNull { it.jar }.distinct()
     }
 }
+
+@Serializable
+data class SignedSnapshot(val data: String, val sig: String)
+
+val SNAP_KEYS: List<String> = listOf("MCowBQYDK2VwAyEAbb+U2ip78CNYMwi2NZudBj1bIhfu8yPrqS7CydndqkM=")

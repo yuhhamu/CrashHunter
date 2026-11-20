@@ -12,7 +12,7 @@ data class CrashFingerprint(
 )
 
 object StackTraceTools {
-    private val pathLike = Regex("""([A-Za-z]:[\\/][^\s]*|/[\w.\-/]{3,})""")
+    private val pathLike = Regex("""((?:\\\\|(?<![:\w])//)[^\\/\s]+[\\/](?:[^\\/:*?"<>|\r\n]+[\\/])*[^\\/:*?"<>|\r\n\s]*|(?<![A-Za-z0-9])[A-Za-z]:[\\/](?:[^\\/:*?"<>|\r\n]+[\\/])*[^\\/:*?"<>|\r\n\s]*|(?<![:\w/])/[\w.\-/]{3,})""")
     private val noise = Regex("""(0x[0-9a-fA-F]+|[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}|\d+)""")
     private val ignoredPrefixes = listOf(
         "java.", "javax.", "jdk.", "sun.", "com.sun.", "kotlin.", "kotlinx.", "net.minecraft.", "com.mojang.",
@@ -26,7 +26,7 @@ object StackTraceTools {
     private val userLike = Regex("""(?i)(users|home)[\\/][^\\/\s]+""")
 
     fun stripPaths(text: String?): String =
-        (text ?: "").replace(pathLike, "<path>").replace(userLike, "<user>").trim()
+        dev.crashhunter.core.util.Redactor.redact((text ?: "").replace(pathLike, "<path>").replace(userLike, "<user>")).trim()
 
     fun normalizeMessage(message: String?): String =
         (message ?: "").replace(pathLike, "<path>").replace(noise, "<n>").trim()

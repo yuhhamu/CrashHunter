@@ -39,6 +39,8 @@ data class RemoteFile(
     val fileId: String,
     val versionLabel: String,
     val pageUrl: String? = null,
+    val projectName: String? = null,
+    val author: String? = null,
 )
 
 @Serializable

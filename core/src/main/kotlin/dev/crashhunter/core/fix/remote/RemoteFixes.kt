@@ -35,13 +35,16 @@ class RemoteResolverImpl(
         for (slug in slugs) {
             val p = runCatching { modrinth.project(slug) }.getOrNull() ?: continue
             if (p.projectType != "mod") continue
-            val c = modrinth.versions(p.id, profile).mapNotNull { ModrinthClient.toRemote(it, p.slug) }.take(maxCandidates)
+            val vs = modrinth.versions(p.id, profile).take(maxCandidates)
+            if (vs.isEmpty()) continue
+            val owner = modrinth.owner(p.id)
+            val c = vs.mapNotNull { ModrinthClient.toRemote(it, p.slug, p.title, owner) }
             if (c.isNotEmpty()) return Resolved(c)
         }
         val hit = runCatching { modrinth.search(modId, profile) }.getOrDefault(emptyList())
             .firstOrNull { h -> slugs.any { it.equals(h.slug, true) } || h.title.replace(" ", "").equals(modId.replace("_", ""), true) }
         if (hit != null) {
-            val c = modrinth.versions(hit.id, profile).mapNotNull { ModrinthClient.toRemote(it, hit.slug) }.take(maxCandidates)
+            val c = modrinth.versions(hit.id, profile).mapNotNull { ModrinthClient.toRemote(it, hit.slug, hit.title, hit.author) }.take(maxCandidates)
             if (c.isNotEmpty()) return Resolved(c)
         }
         if (cfReady) {
