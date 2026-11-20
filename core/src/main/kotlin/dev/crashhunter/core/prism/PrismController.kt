@@ -11,6 +11,7 @@ class PrismController(
     private val install: LauncherInstallation,
     private val finder: ProcessFinder = ProcessFinder.default(),
     private val logDir: File? = null,
+    private val staleMs: Long = 20_000L,
 ) : GameLauncher {
     private val ownPid = ProcessHandle.current().pid()
     private val launcherArg = Regex("""prismlauncher"?\s+-l\s""")
@@ -50,15 +51,28 @@ class PrismController(
     }
 
     override fun clearStaleLaunchers(instanceId: String): Int {
-        val stale = finder.find { cmd ->
-            val c = cmd.replace('\\', '/').trim().lowercase()
-            (c.contains("prismlauncher.exe") || c.startsWith("prismlauncher")) && LAUNCH_ARG.containsMatchIn(c)
-        }
-            .filter { it != ownPid }
-            .filter { pid -> ProcessHandle.of(pid).map { h -> h.isAlive && h.descendants().noneMatch { it.isAlive } }.orElse(false) }
+        val stale = launcherPids(instanceId)
+            .filter { pid -> idle(pid) && age(pid) >= staleMs }
         stale.forEach { kill(it, force = true) }
         return stale.size
     }
+
+    override fun settleLaunchers(timeoutMs: Long) {
+        val end = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < end) {
+            val exiting = finder.find { cmd ->
+                val c = cmd.replace('\\', '/').trim().lowercase()
+                (c.contains("prismlauncher.exe") || c.startsWith("prismlauncher")) && LAUNCH_ARG.containsMatchIn(c)
+            }.filter { it != ownPid && idle(it) && age(it) >= SETTLE_MS }
+            if (exiting.isEmpty()) return
+            Thread.sleep(500)
+        }
+    }
+
+    private fun idle(pid: Long) = ProcessHandle.of(pid).map { h -> h.isAlive && h.descendants().noneMatch { it.isAlive } }.orElse(false)
+
+    private fun age(pid: Long): Long = ProcessHandle.of(pid).flatMap { it.info().startInstant() }
+        .map { System.currentTimeMillis() - it.toEpochMilli() }.orElse(0L)
 
     override fun refreshInstances() {
         val probe = File(install.instancesDir, ".crashhunter-rescan")
@@ -68,6 +82,7 @@ class PrismController(
     companion object {
         val HANDOFF_FAILED = Regex("Unable to redirect command", RegexOption.IGNORE_CASE)
         private val LAUNCH_ARG = Regex("""\s-l\s""")
+        private const val SETTLE_MS = 3_000L
     }
 
     override fun stop(instanceId: String, spawned: Process?) = stop(instanceId, spawned, 4_000, 20_000)

@@ -54,6 +54,7 @@ interface GameLauncher {
     fun closeLaunchers(instanceIds: Collection<String>) {}
     fun handoffFailed(instanceId: String, spawned: Process?): Boolean = false
     fun clearStaleLaunchers(instanceId: String): Int = 0
+    fun settleLaunchers(timeoutMs: Long) {}
     fun refreshInstances() {}
 }
 

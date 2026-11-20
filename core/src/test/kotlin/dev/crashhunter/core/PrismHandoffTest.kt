@@ -22,8 +22,8 @@ class PrismHandoffTest {
         setExecutable(true)
     }
 
-    private fun controller(exe: File, logs: File, finder: ProcessFinder = finderOf { emptyList() }) =
-        PrismController(LauncherInstallation(exe, exe.parentFile, File(exe.parentFile, "instances")), finder, logs)
+    private fun controller(exe: File, logs: File, finder: ProcessFinder = finderOf { emptyList() }, staleMs: Long = 0) =
+        PrismController(LauncherInstallation(exe, exe.parentFile, File(exe.parentFile, "instances")), finder, logs, staleMs)
 
     @Test
     fun detectsAFailedHandoff() {
@@ -61,6 +61,9 @@ class PrismHandoffTest {
         val finder = finderOf { pred -> lines.filter { pred(it.value) }.keys.toList() }
         val dir = Files.createTempDirectory("ch-handoff").toFile()
         try {
+            assertEquals(0, controller(File(dir, "prismlauncher"), File(dir, "logs"), finder, staleMs = 60_000).clearStaleLaunchers("inst"))
+            assertEquals(0, controller(File(dir, "prismlauncher"), File(dir, "logs"), finder).clearStaleLaunchers("third"))
+            assertTrue(idle.isAlive)
             assertEquals(1, controller(File(dir, "prismlauncher"), File(dir, "logs"), finder).clearStaleLaunchers("inst"))
             idle.waitFor()
             assertFalse(idle.isAlive)

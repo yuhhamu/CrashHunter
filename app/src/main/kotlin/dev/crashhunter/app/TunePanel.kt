@@ -350,24 +350,44 @@ class TunePanel(private val ctx: AppContext, private val frame: MainFrame) : JPa
         dlg.isVisible = true
     }
 
-    private fun start(inst: GameInstance, rules: Map<String, ModRule>) {
+    private var lastRules: Map<String, ModRule> = emptyMap()
+
+    private fun start(inst: GameInstance, rules: Map<String, ModRule>, chosen: dev.crashhunter.core.tune.TuneCheckpoint? = null, ask: Boolean = true) {
         val launcher = ctx.launcher ?: return
         val install = launcher.installation
         if (ctx.bisectRunning || ctx.fixRunning) { Ui.toast(this, ctx.strings["tune.busy"]); return }
         val s = ctx.strings
+        val store = dev.crashhunter.core.tune.TuneResume.default
+        var resume = chosen
+        if (resume == null && ask) {
+            val saved = runCatching { store.load(inst.id) }.getOrNull()
+            if (saved != null) {
+                val options = arrayOf(s["tune.resume.continue"], s["tune.resume.restart"], s["action.cancel"])
+                when (JOptionPane.showOptionDialog(this, s.f("tune.resume.ask", saved.engine.round), "CrashHunter", JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0])) {
+                    0 -> resume = saved
+                    1 -> {}
+                    else -> return
+                }
+            }
+        }
+        lastRules = rules
         logLines.clear(); logArea.text = ""; round = 0; multi = false; unseen = 0; latestButton.isVisible = false
         details.reset(); changes.clear(); status.reset(); liveNames.clear()
         runStart = System.currentTimeMillis()
         ctx.bisectRunning = true
         showProgress()
         val session = TuneSession(launcher, inst, ctx.settings, ctx.diagnosis, ctx.resolver(), ctx.tuneApplier(), rules, planner = { ctx.fixPlannerFor(it) },
-            dbFirst = if (ctx.settings.dbUse) { copy -> DbCheckView.run(ctx, copy, 0).check } else null) { p -> SwingUtilities.invokeLater { onProgress(p) } }
+            dbFirst = if (ctx.settings.dbUse) { copy -> DbCheckView.run(ctx, copy, 0).check } else null, resume = resume, store = store) { p -> SwingUtilities.invokeLater { onProgress(p) } }
         job = scope.launch {
             var done: TuneReport? = null
             try { withContext(Dispatchers.IO) { done = session.run() } } catch (_: CancellationException) {
             } finally { ctx.bisectRunning = false; ticker.stop() }
             job = null
-            val r = done ?: run { showSetup(); return@launch }
+            val r = done ?: run {
+                val saved = runCatching { store.load(inst.id) }.getOrNull()
+                if (saved != null) showStopped(inst, saved) else showSetup()
+                return@launch
+            }
             report = r
             showResult(r)
             if (ctx.settings.dbSendRuns) runCatching {
@@ -591,6 +611,8 @@ class TunePanel(private val ctx: AppContext, private val frame: MainFrame) : JPa
         val buttons = mutableListOf<JComponent>()
         if (applied == null && st == TuneStatus.LAUNCHED && r.result.steps.isNotEmpty()) buttons += Ui.button(LineIcon.Kind.PLAY, s["tune.apply"]) { apply(r) }
         if (applied != null) buttons += Ui.button(null, s["tune.undo"]) { undo() }
+        val saved = if (applied == null && st in dev.crashhunter.core.tune.TuneResume.RESUMABLE) runCatching { dev.crashhunter.core.tune.TuneResume.default.load(r.source.id) }.getOrNull() else null
+        if (saved != null) buttons += Ui.button(LineIcon.Kind.PLAY, s["tune.resume.button"]) { start(r.source, lastRules, saved) }
         buttons += Ui.button(null, if (applied == null) s["tune.discard"] else s["tune.back"]) { discard(r) }
         card.add(Ui.row(*buttons.toTypedArray()))
         if (logLines.isNotEmpty()) {
@@ -623,7 +645,28 @@ class TunePanel(private val ctx: AppContext, private val frame: MainFrame) : JPa
         }
     }
 
+    private fun showStopped(inst: GameInstance, saved: dev.crashhunter.core.tune.TuneCheckpoint) {
+        val s = ctx.strings
+        val card = Ui.card()
+        card.add(Ui.row(JLabel(DotIcon(StatusColors.neutral)), Ui.label(s["tune.result.CANCELLED"], 16f, bold = true), gap = 8))
+        card.add(Ui.gap(6))
+        card.add(Ui.label(s.f("tune.resume.saved", saved.engine.round), muted = true))
+        card.add(Ui.gap(14))
+        card.add(Ui.row(
+            Ui.button(LineIcon.Kind.PLAY, s["tune.resume.button"]) { start(inst, lastRules, saved) },
+            Ui.button(null, s["tune.discard"]) {
+                scope.launch {
+                    withContext(Dispatchers.IO) { dev.crashhunter.core.tune.TuneResume.default.clear(inst.id); WorkCopy.delete(java.io.File(saved.copyDir)) }
+                    showSetup()
+                }
+            },
+            Ui.button(null, s["tune.back"]) { showSetup() },
+        ))
+        setBody(JPanel(BorderLayout()).apply { isOpaque = false; add(card, BorderLayout.NORTH) })
+    }
+
     private fun discard(r: TuneReport) {
+        dev.crashhunter.core.tune.TuneResume.default.clear(r.source.id)
         scope.launch {
             r.copy?.let { c -> withContext(Dispatchers.IO) { WorkCopy.delete(c.dir) } }
             showSetup()

@@ -71,6 +71,19 @@ data class Fixed(
     val launched: Boolean,
 ) : TuneStep
 
+@Serializable
+data class PendingState(val removed: Removed, val disabled: List<String>)
+
+@Serializable
+data class EngineState(
+    val round: Int,
+    val steps: List<TuneStep>,
+    val pending: List<PendingState> = emptyList(),
+    val policy: Map<String, ModPolicy> = emptyMap(),
+    val loaderTried: Boolean = false,
+    val loaderNow: String? = null,
+)
+
 data class TuneResult(val status: TuneStatus, val steps: List<TuneStep>, val blockedBy: List<String> = emptyList(), val message: String = "")
 
 class ReplaceDone(val newFile: String, val undo: suspend () -> Unit)
@@ -116,6 +129,8 @@ class TuneEngine(
     private val loader: LoaderOps? = null,
     private val removeFirst: Boolean = false,
     private val enable: (files: Set<String>) -> Unit = {},
+    private val resume: EngineState? = null,
+    private val checkpoint: (EngineState) -> Unit = {},
 ) {
     private class Pending(val removed: Removed, val disabled: Set<String>)
     private val pending = mutableListOf<Pending>()
@@ -123,10 +138,44 @@ class TuneEngine(
     private var loaderNow: String? = loader?.current
     private val policy = HashMap(initialPolicy)
     private fun policyOf(file: String) = policy[file] ?: ModPolicy.REMOVABLE
+    private var stopped: TuneResult? = null
+
+    init {
+        resume?.let { r ->
+            policy.putAll(r.policy)
+            loaderTried = r.loaderTried
+            r.loaderNow?.let { loaderNow = it }
+            r.pending.forEach { pending += Pending(it.removed, it.disabled.toSet()) }
+        }
+    }
+
+    fun state(round: Int, steps: List<TuneStep>) = EngineState(round, steps.toList(), pending.map { PendingState(it.removed, it.disabled.sorted()) },
+        HashMap(policy), loaderTried, loaderNow)
 
     suspend fun run(): TuneResult {
-        val steps = mutableListOf<TuneStep>()
-        for (round in 1..maxRounds) {
+        val steps = (resume?.steps ?: emptyList()).toMutableList()
+        var current = resume?.round ?: 1
+        try {
+            return loop(steps) { current = it }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            checkpoint(state(current, steps))
+            throw e
+        }
+    }
+
+    private fun stop(o: TrialOutcome): Boolean {
+        if (o.result != TrialResult.START_FAILED && o.result != TrialResult.CANCELLED) return false
+        stopped = TuneResult(if (o.result == TrialResult.CANCELLED) TuneStatus.CANCELLED else TuneStatus.START_FAILED, emptyList(), message = o.note ?: "")
+        return true
+    }
+
+    private fun stoppedWith(steps: List<TuneStep>): TuneResult = stopped!!.copy(steps = steps.toList())
+
+    private suspend fun loop(steps: MutableList<TuneStep>, at: (Int) -> Unit): TuneResult {
+        val from = resume?.round ?: 1
+        for (round in from..maxRounds) {
+            at(round)
+            checkpoint(state(round, steps))
             listener(TuneEvent.Round(round))
             var first = find(round)
             if (first is TuneFind.WithFixes) {
@@ -136,13 +185,15 @@ class TuneEngine(
             }
             val found = when (val f = first) {
                 is TuneFind.WithFixes -> return TuneResult(TuneStatus.ERROR, steps)
-                TuneFind.Launches -> { restore(steps); return TuneResult(TuneStatus.LAUNCHED, steps) }
+                TuneFind.Launches -> { if (!restore(steps)) { checkpoint(state(round, steps)); return stoppedWith(steps) }; return TuneResult(TuneStatus.LAUNCHED, steps) }
                 is TuneFind.Stop -> {
                     if (f.status == TuneStatus.NOT_A_MOD) when (tryLoader(round, null, steps)) {
                         VersionOutcome.LAUNCHED -> return TuneResult(TuneStatus.LAUNCHED, steps)
                         VersionOutcome.PROGRESS -> continue
+                        VersionOutcome.STOPPED -> { checkpoint(state(round, steps)); return stoppedWith(steps) }
                         VersionOutcome.NONE -> {}
                     }
+                    checkpoint(state(round, steps))
                     return TuneResult(f.status, steps, message = f.message)
                 }
                 is TuneFind.Culprits -> f
@@ -157,14 +208,16 @@ class TuneEngine(
             val early = removeFirst && found.removable && !found.db && options.isNotEmpty()
             if (!early) {
                 when (tryVersions(round, found, steps)) {
-                    VersionOutcome.LAUNCHED -> { restore(steps); return TuneResult(TuneStatus.LAUNCHED, steps) }
+                    VersionOutcome.LAUNCHED -> { if (!restore(steps)) { checkpoint(state(round, steps)); return stoppedWith(steps) }; return TuneResult(TuneStatus.LAUNCHED, steps) }
                     VersionOutcome.PROGRESS -> continue
+                    VersionOutcome.STOPPED -> { checkpoint(state(round, steps)); return stoppedWith(steps) }
                     VersionOutcome.NONE -> {}
                 }
                 if (!found.removable) continue
                 if (!found.direct && !removeFirst) when (tryLoader(round, found.fingerprint, steps)) {
                     VersionOutcome.LAUNCHED -> return TuneResult(TuneStatus.LAUNCHED, steps)
                     VersionOutcome.PROGRESS -> continue
+                    VersionOutcome.STOPPED -> { checkpoint(state(round, steps)); return stoppedWith(steps) }
                     VersionOutcome.NONE -> {}
                 }
             }
@@ -180,7 +233,14 @@ class TuneEngine(
         return TuneResult(TuneStatus.LIMIT, steps)
     }
 
-    private enum class VersionOutcome { LAUNCHED, PROGRESS, NONE }
+    private enum class VersionOutcome { LAUNCHED, PROGRESS, NONE, STOPPED }
+
+    private suspend fun guarded(undo: suspend () -> Unit): TrialOutcome = try {
+        launch()
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { undo() }
+        throw e
+    }
 
     private suspend fun tryVersions(round: Int, found: TuneFind.Culprits, steps: MutableList<TuneStep>): VersionOutcome {
         for (file in found.files) {
@@ -190,7 +250,8 @@ class TuneEngine(
             for ((i, alt) in alts.withIndex()) {
                 listener(TuneEvent.TryVersion(file, alt.versionLabel, i + 1, alts.size))
                 val done = runCatching { replace(file, alt) }.getOrNull() ?: continue
-                val o = launch()
+                val o = guarded { done.undo() }
+                if (stop(o)) { done.undo(); return VersionOutcome.STOPPED }
                 val newFailure = o.result == TrialResult.FAIL && (if (found.fingerprint == null) found.db else o.fingerprint != null &&
                     !sameFailure(found.fingerprint, o.fingerprint))
                 listener(TuneEvent.VersionResult(file, alt.versionLabel, o.result, newFailure))
@@ -220,7 +281,8 @@ class TuneEngine(
         for ((i, v) in versions.withIndex()) {
             listener(TuneEvent.TryLoader(v, i + 1, versions.size))
             val done = runCatching { l.set(v) }.getOrNull() ?: continue
-            val o = launch()
+            val o = guarded { done.undo() }
+            if (stop(o)) { done.undo(); loaderTried = false; return VersionOutcome.STOPPED }
             val newFailure = o.result == TrialResult.FAIL && fp != null && o.fingerprint != null && !sameFailure(fp, o.fingerprint)
             listener(TuneEvent.LoaderResult(v, o.result, newFailure))
             val from = loaderNow ?: l.current
@@ -233,8 +295,8 @@ class TuneEngine(
         return VersionOutcome.NONE
     }
 
-    private suspend fun restore(steps: MutableList<TuneStep>) {
-        if (pending.isEmpty()) return
+    private suspend fun restore(steps: MutableList<TuneStep>): Boolean {
+        if (pending.isEmpty()) return true
         listener(TuneEvent.RestoreStart(pending.map { it.removed.file }))
         for (p in pending.toList()) {
             val pick = p.removed.file
@@ -248,7 +310,8 @@ class TuneEngine(
                     enable(p.disabled)
                     val swap = runCatching { replace(target, alt) }.getOrNull()
                     if (swap == null) { disable(p.disabled); continue }
-                    val o = launch()
+                    val o = guarded { swap.undo(); disable(p.disabled) }
+                    if (stop(o)) { swap.undo(); disable(p.disabled); return false }
                     listener(TuneEvent.RestoreResult(target, alt.versionLabel, o.result))
                     if (o.result == TrialResult.PASS) {
                         carry(target, swap.newFile)
@@ -262,8 +325,9 @@ class TuneEngine(
                     disable(p.disabled)
                 }
             }
+            pending.remove(p)
         }
-        pending.clear()
+        return true
     }
 
     private fun carry(from: String, to: String) {

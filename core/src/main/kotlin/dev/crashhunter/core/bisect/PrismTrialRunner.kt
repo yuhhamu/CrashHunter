@@ -7,6 +7,7 @@ import dev.crashhunter.core.analyze.LatestLogParser
 import dev.crashhunter.core.analyze.StackTraceTools
 import dev.crashhunter.core.model.GameInstance
 import dev.crashhunter.core.launcher.GameLauncher
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.Dispatchers
@@ -67,18 +68,24 @@ class PrismTrialRunner(
     private val afterStopMs: Long = 1_500,
     private val tracker: dev.crashhunter.core.launcher.GameTracker? = null,
     private val relaunchCheckMs: Long = 4_000,
-    private val maxRelaunches: Int = 2,
+    private val maxRelaunches: Int = 4,
     private val refreshAfterMs: Long = 30_000,
     private val windowTitle: String? = null,
     private val minimizeWindow: Boolean = false,
+    private val settleMs: Long = 8_000,
+    private val handoffMs: Long = 20_000,
 ) : TrialRunner {
+    companion object {
+        private val launchGate = kotlinx.coroutines.sync.Mutex()
+    }
+
     override suspend fun run(enabled: Set<String>): TrialOutcome = withContext(Dispatchers.IO) {
         toggler.apply(candidates, enabled)
         val since = System.currentTimeMillis() - 2_000
         val id = instance.id
         gate.answer = null
         status("launch")
-        var proc = runInterruptible { controller.launch(id) }
+        var proc = gatedLaunch(id)
         var start = System.currentTimeMillis()
         var launcherMissing = 0
         var relaunches = 0
@@ -116,14 +123,14 @@ class PrismTrialRunner(
                         val cleared = runInterruptible { controller.clearStaleLaunchers(id) }
                         status(if (cleared > 0) "handoff" else "prismBusy")
                         delay(5_000L * relaunches)
-                        proc = runInterruptible { controller.launch(id) }
+                        proc = gatedLaunch(id)
                         start = System.currentTimeMillis()
                     } else if (!gameAlive && gameSeenAt == null && !refreshed && now - start >= refreshAfterMs && proc?.isAlive == false) {
                         refreshed = true
                         status("rescan")
                         runInterruptible { controller.refreshInstances() }
                         delay(2_000)
-                        proc = runInterruptible { controller.launch(id) }
+                        proc = gatedLaunch(id)
                         start = System.currentTimeMillis()
                     } else if (!gameAlive && gameSeenAt == null && now - start >= relaunchCheckMs) {
                         val none = runInterruptible { controller.launcherProcesses() }.isEmpty()
@@ -132,7 +139,7 @@ class PrismTrialRunner(
                             relaunches++
                             launcherMissing = 0
                             status("relaunch")
-                            proc = runInterruptible { controller.launch(id) }
+                            proc = gatedLaunch(id)
                             start = System.currentTimeMillis()
                         }
                     }
@@ -194,6 +201,18 @@ class PrismTrialRunner(
                 delay(afterStopMs)
             }
         }
+    }
+
+    private suspend fun gatedLaunch(id: String): Process? = launchGate.withLock {
+        runInterruptible { controller.settleLaunchers(settleMs) }
+        val p = runInterruptible { controller.launch(id) }
+        val end = System.currentTimeMillis() + handoffMs
+        while (System.currentTimeMillis() < end) {
+            if (runInterruptible { controller.gamePids(id) }.isNotEmpty()) break
+            if (p != null && !p.isAlive && runInterruptible { controller.handoffFailed(id, p) }) break
+            delay(500)
+        }
+        p
     }
 
     private fun readLog(since: Long): String? {

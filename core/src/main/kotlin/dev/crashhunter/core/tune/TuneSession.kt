@@ -43,6 +43,52 @@ sealed interface TuneProgress {
 
 data class TuneReport(val result: TuneResult, val source: GameInstance, val copy: GameInstance?, val names: Map<String, String>, val versions: Map<String, String> = emptyMap(), val learned: List<dev.crashhunter.core.db.DbItem> = emptyList())
 
+@kotlinx.serialization.Serializable
+data class TuneCheckpoint(
+    val sourceId: String,
+    val copyDir: String,
+    val time: Long,
+    val engine: EngineState,
+    val passSets: List<List<String>> = emptyList(),
+    val staticDone: Boolean = false,
+    val status: String? = null,
+    val message: String = "",
+)
+
+class TuneResume(private val dir: File) {
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+    private fun file(sourceId: String) = File(dir, sourceId.replace(Regex("[^A-Za-z0-9._-]"), "_") + ".json")
+
+    fun save(c: TuneCheckpoint) {
+        dir.mkdirs()
+        val f = file(c.sourceId)
+        val tmp = File(dir, f.name + ".tmp")
+        tmp.writeText(json.encodeToString(TuneCheckpoint.serializer(), c))
+        if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+    }
+
+    fun load(sourceId: String): TuneCheckpoint? {
+        val f = file(sourceId)
+        if (!f.isFile) return null
+        val c = runCatching { json.decodeFromString(TuneCheckpoint.serializer(), f.readText()) }.getOrNull() ?: return null
+        val copy = File(c.copyDir)
+        return c.takeIf { it.sourceId == sourceId && copy.isDirectory && WorkCopy.isWorkCopy(copy) }
+    }
+
+    fun mark(sourceId: String, status: TuneStatus, message: String) {
+        val c = load(sourceId) ?: return
+        save(c.copy(status = status.name, message = message, time = System.currentTimeMillis()))
+    }
+
+    fun clear(sourceId: String) { file(sourceId).delete() }
+
+    companion object {
+        val default: TuneResume get() = TuneResume(File(AppDirs.dataDir, "tune-resume"))
+        val RESUMABLE = setOf(TuneStatus.START_FAILED, TuneStatus.CANCELLED, TuneStatus.ERROR)
+    }
+}
+
 object TunePolicyStore {
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
     private fun file(instanceId: String) = File(File(AppDirs.dataDir, "tune"), instanceId.replace(Regex("[^A-Za-z0-9._-]"), "_") + ".json")
@@ -69,12 +115,22 @@ class TuneSession(
     val recorder: dev.crashhunter.core.db.RunRecorder = dev.crashhunter.core.db.RunRecorder(),
     private val planner: ((Set<FixKind>) -> dev.crashhunter.core.fix.FixPlanner)? = null,
     private val dbFirst: (suspend (GameInstance) -> dev.crashhunter.core.db.DbCheck?)? = null,
+    private val resume: TuneCheckpoint? = null,
+    private val store: TuneResume? = null,
     private val progress: (TuneProgress) -> Unit = {},
 ) {
     suspend fun run(): TuneReport {
         progress(TuneProgress.Phase("copy"))
-        val copy = WorkCopy.create(source, settings.includeSaves, variant = "tune")
-        dev.crashhunter.core.mods.CrashTools.disable(copy.modsDir).takeIf { it.isNotEmpty() }?.let { progress(TuneProgress.Note("toolOff", listOf(it.joinToString(", ")))) }
+        val resumed = resume?.let { r -> runCatching { dev.crashhunter.core.launcher.Formats.of(source).read(File(r.copyDir)) }.getOrNull() }
+        val copy = resumed ?: WorkCopy.create(source, settings.includeSaves, variant = "tune")
+        if (resumed != null) {
+            staticDone = resume!!.staticDone
+            passSets += resume.passSets.map { it.toSet() }
+            progress(TuneProgress.Note("resumed", listOf(resume.engine.round.toString())))
+        } else {
+            store?.clear(source.id)
+            dev.crashhunter.core.mods.CrashTools.disable(copy.modsDir).takeIf { it.isNotEmpty() }?.let { progress(TuneProgress.Note("toolOff", listOf(it.joinToString(", ")))) }
+        }
         val names = HashMap<String, String>()
         val versions = HashMap<String, String>()
         fun remember(index: ModIndex) {
@@ -150,6 +206,11 @@ class TuneSession(
                         val record = runCatching { workApplier.apply(copy, listOf(p)) }.getOrNull() ?: continue
                         val before = known
                         val after = launchAll(copy, controller, tracker, trialSettings, journal)
+                        if (after.outcome.result == TrialResult.START_FAILED || after.outcome.result == TrialResult.CANCELLED) {
+                            workApplier.undo(record)
+                            last = before
+                            return@TuneEngine done(TuneFind.Stop(if (after.outcome.result == TrialResult.CANCELLED) TuneStatus.CANCELLED else TuneStatus.START_FAILED, after.outcome.note ?: ""))
+                        }
                         val resolved = after.outcome.result == TrialResult.FAIL && (findingKeys(before.diagnosis) - findingKeys(after.diagnosis)).isNotEmpty() &&
                             findingKeys(after.diagnosis).isNotEmpty()
                         val newFailure = resolved || after.outcome.result == TrialResult.FAIL && before.outcome.fingerprint != null && after.outcome.fingerprint != null &&
@@ -187,8 +248,17 @@ class TuneSession(
                 val keyNow = dev.crashhunter.core.bisect.BisectEngine.keyOf(enabledOf(copy))
                 progress(TuneProgress.Phase("search"))
                 val hang = known.outcome.result == TrialResult.HANG
-                val report = BisectSession(launcher, copy, bisectSettings.copy(timeoutSec = adaptive(trialSettings).timeoutSec, hangIsFailure = bisectSettings.hangIsFailure || hang), diagnosisService, known.diagnosis, extraSuspects = dbSuspects(copy), inPlace = true,
+                suspend fun search() = BisectSession(launcher, copy, bisectSettings.copy(timeoutSec = adaptive(trialSettings).timeoutSec, hangIsFailure = bisectSettings.hangIsFailure || hang), diagnosisService, known.diagnosis, extraSuspects = dbSuspects(copy), inPlace = true,
                     seed = mapOf(keyNow to known.outcome), knownPass = passSets, recorder = recorder) { p -> progress(TuneProgress.Bisect(p)) }.run()
+                var report = search()
+                var retries = 0
+                while (report.result.status == BisectStatus.START_FAILED && report.result.message == dev.crashhunter.core.bisect.PRISM_UNRESPONSIVE && retries < PRISM_RETRIES) {
+                    retries++
+                    progress(TuneProgress.Note("prismRetry", listOf(retries.toString(), PRISM_RETRIES.toString())))
+                    runCatching { controller.closeLaunchers(listOf(copy.id)) }
+                    kotlinx.coroutines.delay(PRISM_WAIT_MS * retries)
+                    report = search()
+                }
                 lastBisect = report.result.culprits
                 if (report.result.status == BisectStatus.FOUND) learnConflict(report.result.culprits, report.crashDiagnosis?.fingerprint ?: known.outcome.fingerprint, report.result.trials, copy)
                 done(when (report.result.status) {
@@ -239,6 +309,8 @@ class TuneSession(
             loader = loaderOps(copy),
             removeFirst = true,
             enable = { files -> last = null; for (f in files) { val off = File(copy.modsDir, "$f.disabled"); if (off.isFile) off.renameTo(File(copy.modsDir, f)) }; remember(ModIndex.load(copy.modsDir)) },
+            resume = resumed?.let { resume!!.engine },
+            checkpoint = { st -> runCatching { store?.save(TuneCheckpoint(source.id, copy.dir.absolutePath, System.currentTimeMillis(), st, passSets.map { it.sorted() }, staticDone)) } },
         )
         val result = try {
             engine.run()
@@ -248,6 +320,7 @@ class TuneSession(
             TuneResult(TuneStatus.ERROR, emptyList(), message = e.message ?: e.javaClass.simpleName)
         }
         runCatching { controller.closeLaunchers(listOf(copy.id)) }
+        runCatching { if (result.status in TuneResume.RESUMABLE) store?.mark(source.id, result.status, result.message) else store?.clear(source.id) }
         copyIndex = ModIndex.load(copy.modsDir)
         return TuneReport(result, source, copy, names, versions, learned(result))
     }
@@ -527,6 +600,8 @@ class TuneSession(
     companion object {
         const val MAX_DB_CANDIDATES = 3
         const val MIN_TIMEOUT_SEC = 180
+        const val PRISM_RETRIES = 2
+        var PRISM_WAIT_MS = 20_000L
         val DIRECT = setOf(Cause.MIXIN_NO_REFMAP, Cause.KNOWN_BROKEN, Cause.CORRUPT_JAR)
         val WIDE_KINDS = setOf(FixKind.LOADER_UPDATE, FixKind.MEMORY, FixKind.JAVA, FixKind.CONFIG_RESET)
         val DEPENDENCY_CAUSES = setOf(Cause.MISSING_DEPENDENCY, Cause.DEPENDENCY_VERSION)

@@ -10,6 +10,7 @@ import dev.crashhunter.core.bisect.TrialResult
 import dev.crashhunter.core.bisect.TrialSettings
 import dev.crashhunter.core.launcher.GameLauncher
 import dev.crashhunter.core.prism.InstanceScanner
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.nio.file.Files
@@ -94,7 +95,7 @@ class TrialRunnerTest {
             override fun gamePids(instanceId: String) = emptyList<Long>()
             override fun stop(instanceId: String, spawned: Process?) {}
         }
-        val r = PrismTrialRunner(game, inst, t, listOf("a.jar"), TrialSettings(startTimeoutSec = 1), { null }, markers, pollMs = 50, pidCheckMs = 100, afterStopMs = 10)
+        val r = PrismTrialRunner(game, inst, t, listOf("a.jar"), TrialSettings(startTimeoutSec = 1), { null }, markers, pollMs = 50, pidCheckMs = 100, afterStopMs = 10, handoffMs = 300)
         assertEquals(TrialResult.START_FAILED, r.run(setOf("a.jar")).result)
     }
 
@@ -111,5 +112,38 @@ class TrialRunnerTest {
         val gate = ManualGate()
         val game = FakeGame(inst.gameDir) { Thread.sleep(400); gate.answer = true }
         assertEquals(TrialResult.FAIL, runner(inst, t, game, JudgeMode.MANUAL, gate).run(setOf("a.jar")).result)
+    }
+
+    @Test
+    fun `parallel trials hand their launches to Prism one at a time`() = runBlocking {
+        val events = java.util.Collections.synchronizedList(mutableListOf<String>())
+        fun game(name: String, dir: File) = object : GameLauncher {
+            @Volatile var startedAt = 0L
+            override fun launch(instanceId: String): Process? {
+                events += "launch:$name"
+                startedAt = System.currentTimeMillis()
+                File(dir, "logs").mkdirs(); File(dir, "logs/latest.log").writeText("TITLE\n")
+                return null
+            }
+            override fun gamePids(instanceId: String): List<Long> {
+                if (startedAt == 0L || System.currentTimeMillis() - startedAt < 600) return emptyList()
+                if (!events.contains("game:$name")) events += "game:$name"
+                return listOf(1L)
+            }
+            override fun stop(instanceId: String, spawned: Process?) { startedAt = 0L }
+        }
+        val (a, ta) = setup()
+        val (b, tb) = setup()
+        val ra = PrismTrialRunner(game("a", a.gameDir), a, ta, listOf("a.jar"), TrialSettings(JudgeMode.AUTO, startTimeoutSec = 10, timeoutSec = 20), { null }, markers, pollMs = 50, pidCheckMs = 100, afterStopMs = 10)
+        val rb = PrismTrialRunner(game("b", b.gameDir), b, tb, listOf("a.jar"), TrialSettings(JudgeMode.AUTO, startTimeoutSec = 10, timeoutSec = 20), { null }, markers, pollMs = 50, pidCheckMs = 100, afterStopMs = 10)
+        val results = kotlinx.coroutines.coroutineScope {
+            val x = async(kotlinx.coroutines.Dispatchers.IO) { ra.run(setOf("a.jar")) }
+            val y = async(kotlinx.coroutines.Dispatchers.IO) { rb.run(setOf("a.jar")) }
+            listOf(x.await(), y.await())
+        }
+        assertTrue(results.all { it.result == TrialResult.PASS }, results.toString())
+        val first = events.first().substringAfter(':')
+        val second = if (first == "a") "b" else "a"
+        assertTrue(events.indexOf("game:$first") < events.indexOf("launch:$second"), events.toString())
     }
 }
