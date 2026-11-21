@@ -58,7 +58,13 @@ class BisectEngine(
     val knownPass: MutableList<Set<String>> = mutableListOf(),
     private val onVerdict: (Set<String>, Verdict) -> Unit = { _, _ -> },
     private val maxUnknown: Int = 8,
+    private val demote: (TrialOutcome) -> Collection<String> = { emptyList() },
+    private val maxRestarts: Int = 3,
+    private val onDemote: (List<String>) -> Unit = {},
 ) {
+    private val otherSeen = HashMap<String, Int>()
+    private val demoted = LinkedHashSet<String>()
+    private class Restart(val files: List<String>) : RuntimeException()
     @Volatile var unknowns = 0
         private set
     private var targetHang = false
@@ -208,11 +214,22 @@ class BisectEngine(
         if (none.result == TrialResult.START_FAILED) return BisectResult(BisectStatus.START_FAILED, trials = trials, message = none.note)
         if (reproduced(none)) return BisectResult(BisectStatus.NOT_A_MOD, trials = trials)
 
-        val order = dependenciesFirst(suspects.filter { it in candidateSet } + candidates.filter { it !in suspects })
-        val minimal = try {
-            findCulprits(order, suspects.count { it in candidateSet })
-        } catch (e: Undecided) {
-            return BisectResult(BisectStatus.INCONCLUSIVE, e.range, trials = trials, otherCrashSeen = otherCrash, message = UNDECIDED)
+        var restarts = 0
+        var minimal: List<String>
+        while (true) {
+            val lead = suspects.filter { it in candidateSet && it !in demoted }
+            val order = dependenciesFirst(lead + candidates.filter { it !in suspects }).filter { it !in demoted } + demoted.filter { it in candidateSet }
+            try {
+                minimal = findCulprits(order, lead.size)
+                break
+            } catch (e: Undecided) {
+                return BisectResult(BisectStatus.INCONCLUSIVE, e.range, trials = trials, otherCrashSeen = otherCrash, message = UNDECIDED)
+            } catch (e: Restart) {
+                restarts++
+                demoted += e.files
+                runCatching { onDemote(e.files) }
+                if (restarts > maxRestarts) return BisectResult(BisectStatus.INCONCLUSIVE, e.files, trials = trials, otherCrashSeen = otherCrash, message = UNDECIDED)
+            }
         }
         pool = minimal.size
         val confirmed = minimal.isNotEmpty() && confirms(minimal)
@@ -272,15 +289,15 @@ class BisectEngine(
         extra = extra.distinct().sorted()
         val unknownAt = HashSet<Int>()
         var misses = 0
-        var jumped = -1
+        var jumped = -1L
         val once = HashSet<Int>()
         while (hi - lo > 1) {
             pool = hi - maxOf(lo, 0)
             focus = fixed.toList() + rest.subList(maxOf(lo, 0), hi)
             project(hi - lo)
-            val lowest = unknownAt.filter { it in (lo + 1) until hi }.minOrNull()
-            if ((hi - 1) in unknownAt && jumped != hi && lowest == lo + 1) {
-                jumped = hi
+            val pair = lo.toLong() * 1_000_000 + hi
+            if (lo >= 0 && unknownAt.any { it in (lo + 1) until hi } && jumped != pair) {
+                jumped = pair
                 if (verdict(runSet(req(fixed + rest.subList(0, maxOf(lo, 0)) + rest[hi - 1]), "search")) == Verdict.REPRO) return hi
             }
             val firstPoints = extra.filter { it !in unknownAt }.take(runners.size)
@@ -294,7 +311,7 @@ class BisectEngine(
             val taken = HashSet<Int>()
             val points = (firstPoints + even).mapNotNull { p -> nearestFree(p, lo, hi, unknownAt, taken)?.also { taken += it } }.distinct().sorted()
             if (points.isEmpty()) {
-                if (jumped != hi && hi in 1..rest.size && verdict(runSet(req(fixed + rest.subList(0, maxOf(lo, 0)) + rest[hi - 1]), "search")) == Verdict.REPRO) return hi
+                if (jumped != lo.toLong() * 1_000_000 + hi && hi in 1..rest.size && verdict(runSet(req(fixed + rest.subList(0, maxOf(lo, 0)) + rest[hi - 1]), "search")) == Verdict.REPRO) return hi
                 throw Undecided(fixed.toList() + rest.subList(maxOf(lo, 0), hi))
             }
             val sets = points.map { req(fixed + rest.subList(0, maxOf(0, it))) }
@@ -308,7 +325,17 @@ class BisectEngine(
                 if (verdicts[i] != Verdict.UNKNOWN) return@forEachIndexed
                 unknowns++
                 misses++
-                if (once.add(pt)) cache.remove(key(sets[i])) else unknownAt += pt
+                if (outs[i].result == TrialResult.HANG && outs[i].note == "timeout" || !once.add(pt)) unknownAt += pt else cache.remove(key(sets[i]))
+            }
+            for ((i, o) in outs.withIndex()) {
+                if (verdicts[i] != Verdict.UNKNOWN || o.result != TrialResult.FAIL) continue
+                val fp = o.fingerprint ?: continue
+                val k = listOf(fp.exception, fp.mods.sorted().joinToString(","), fp.frames.take(3).joinToString(",")).joinToString("|")
+                val n = (otherSeen[k] ?: 0) + 1
+                otherSeen[k] = n
+                if (n < 2) continue
+                val files = runCatching { demote(o) }.getOrDefault(emptyList()).filter { it in candidateSet && it !in demoted && it !in fixed }.distinct()
+                if (files.isNotEmpty()) throw Restart(files)
             }
             if (misses > maxUnknown) throw Undecided(fixed.toList() + rest.subList(maxOf(newLo, 0), newHi))
             hi = newHi

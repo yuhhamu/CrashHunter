@@ -81,4 +81,26 @@ class SearchJudgeTest {
         assertEquals(listOf("b", "c", "a"), board.rank(listOf("a", "c", "b")))
         assertTrue(board.of("c") < board.of("b"))
     }
+
+    @Test
+    fun `a second deterministic failure is moved aside and the first one is still found`() = runBlocking {
+        val a = CrashFingerprint("org.spongepowered.asm.mixin.injection.throwables.InvalidInjectionException", listOf("x.Main"), "ModifyArg", emptyList())
+        val b = CrashFingerprint("cause:CLASS_MISMATCH", listOf("ars.ADItems"), "", listOf("arsdelight"))
+        val all = (1..120).map { "m$it" }
+        val moved = mutableListOf<String>()
+        var trials = 0
+        val r = BisectEngine(all, TrialRunner { e ->
+            trials++
+            when {
+                "m40" in e && "m110" in e -> TrialOutcome(TrialResult.FAIL, a)
+                "m3" in e && "m5" in e -> TrialOutcome(TrialResult.FAIL, b)
+                "m70" in e -> TrialOutcome(TrialResult.HANG)
+                else -> TrialOutcome(TrialResult.PASS)
+            }
+        }, target = a, suspects = listOf("m3", "m5"), demote = { o -> if (o.fingerprint == b) listOf("m3", "m5") else emptyList() }, onDemote = { moved += it }).run()
+        assertEquals(BisectStatus.FOUND, r.status, r.toString())
+        assertEquals(setOf("m40", "m110"), r.culprits.toSet())
+        assertEquals(listOf("m3", "m5"), moved)
+        assertTrue(trials < 45, "trials=$trials")
+    }
 }

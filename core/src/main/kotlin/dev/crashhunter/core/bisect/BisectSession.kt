@@ -47,6 +47,7 @@ class BisectSession(
     private val rank: ((List<String>) -> List<String>)? = null,
     private val onVerdict: (Set<String>, Verdict) -> Unit = { _, _ -> },
     private val minRepeats: Int = 1,
+    private val demote: ((TrialOutcome) -> Collection<String>)? = null,
     private val progress: (BisectProgress) -> Unit = {},
 ) {
     private val runLog = File(AppDirs.logDir, "bisect-${java.text.SimpleDateFormat("yyyyMMdd-HHmmss").format(java.util.Date())}.log")
@@ -187,6 +188,8 @@ class BisectSession(
             hangIsFailure = settings.hangIsFailure,
             repeats = maxOf(settings.repeats, minRepeats),
             onVerdict = onVerdict,
+            demote = demote ?: { o -> o.fingerprint?.mods.orEmpty().mapNotNull { index.byModId(it)?.fileName }.take(2) },
+            onDemote = { files -> event("demote", files.joinToString(", ") { index.byFileName(it)?.displayName ?: it }) },
             cache = cache,
             extraRunners = extras,
             knownPass = knownPass,

@@ -285,7 +285,8 @@ class TuneSession(
                 val seedOutcome = known.outcome
                 suspend fun search() = BisectSession(launcher, copy, bisectSettings.copy(timeoutSec = adaptive(trialSettings).timeoutSec, hangIsFailure = bisectSettings.hangIsFailure || hang), diagnosisService, known.diagnosis, extraSuspects = (dbSuspects(copy) + suspicion.top(enabledOf(copy))).distinct(), inPlace = true,
                     seed = mapOf(keyNow to seedOutcome), knownPass = passSets, recorder = recorder,
-                    rank = { suspicion.rank(it) }, onVerdict = { set, v -> suspicion.trial(set, total, v) }, minRepeats = if (hang) 2 else 1) { p -> progress(TuneProgress.Bisect(p)) }.run()
+                    rank = { suspicion.rank(it) }, onVerdict = { set, v -> suspicion.trial(set, total, v) }, minRepeats = if (hang) 2 else 1,
+                    demote = { o -> demoteFiles(o, ModIndex.load(copy.modsDir)) }) { p -> progress(TuneProgress.Bisect(p)) }.run()
                 var report = search()
                 var retries = 0
                 while (report.result.status == BisectStatus.START_FAILED && report.result.message == dev.crashhunter.core.bisect.PRISM_UNRESPONSIVE && retries < PRISM_RETRIES) {
@@ -408,9 +409,10 @@ class TuneSession(
     }
 
     private var passMs = 0L
+    private var failMs = 0L
 
     private fun adaptive(base: TrialSettings): TrialSettings {
-        val ms = passMs * 2
+        val ms = if (passMs > 0) passMs * 2 else failMs * 4
         if (ms <= 0) return base
         return base.copy(timeoutSec = (ms / 1000).toInt().coerceIn(MIN_TIMEOUT_SEC, base.timeoutSec))
     }
@@ -437,6 +439,7 @@ class TuneSession(
         val o = runner.run(enabled.toSet()).also { journal.delete() }
         val took = System.currentTimeMillis() - started
         if (o.result == TrialResult.PASS) passMs = maxOf(passMs, took)
+        if (o.result == TrialResult.FAIL) failMs = maxOf(failMs, took)
         if (o.result == TrialResult.FAIL) o.fingerprint?.let { fp ->
             if (namedPrints.add(fp.toString())) suspicion.named(fp.mods.mapNotNull { index.byModId(it)?.fileName }.distinct())
         }
@@ -633,18 +636,28 @@ class TuneSession(
         if (top.isNotEmpty()) progress(TuneProgress.Note("suspects", listOf(top.joinToString(", ") { index.byFileName(it)?.displayName ?: it })))
     }
 
-    private fun staticCulprit(known: Known, index: ModIndex): List<String>? {
-        if (known.outcome.result != TrialResult.FAIL) return null
-        val fp = known.outcome.fingerprint ?: return null
-        val d = known.diagnosis
+    private fun demoteFiles(o: dev.crashhunter.core.bisect.TrialOutcome, index: ModIndex): List<String> {
+        val fp = o.fingerprint ?: return emptyList()
+        val named = fp.mods.mapNotNull { index.byModId(it)?.takeIf { j -> j.enabled }?.fileName }
+        val stat = staticMatches(fp, null, index).firstOrNull()?.files.orEmpty()
+        return (stat + named.take(2)).distinct()
+    }
+
+    private fun staticMatches(fp: dev.crashhunter.core.analyze.CrashFingerprint, d: dev.crashhunter.core.analyze.Diagnosis?, index: ModIndex): List<dev.crashhunter.core.scan.StaticFinding> {
         val text = listOfNotNull(fp.exception, fp.message, d?.title, d?.detail, d?.parsed?.effectiveMessage).joinToString("\n") + "\n" + fp.frames.joinToString("\n")
         val named = (fp.mods.mapNotNull { index.byModId(it)?.fileName } + d?.suspects.orEmpty().take(3).mapNotNull { it.jar }).toSet()
         val mismatch = fp.exception == "cause:CLASS_MISMATCH" || MISMATCH_NAMES.any { fp.exception.endsWith(it) || text.contains(it) }
         val enabled = index.jars.filter { it.enabled }.map { it.fileName }.toSet()
-        val hits = staticFindings.filter { f -> f.kind != dev.crashhunter.core.scan.StaticKind.DUPLICATE_CLASS && f.files.all { it in enabled } }.filter { f ->
+        return staticFindings.filter { f -> f.kind != dev.crashhunter.core.scan.StaticKind.DUPLICATE_CLASS && f.files.all { it in enabled } }.filter { f ->
             f.classes.any { c -> text.contains(c) || (c.length > 8 && text.contains(c.substringAfterLast('.'))) } || (mismatch && f.files.any { it in named })
-        }
-        for (f in hits.sortedByDescending { it.kind.weight }) {
+        }.sortedByDescending { it.kind.weight }
+    }
+
+    private fun staticCulprit(known: Known, index: ModIndex): List<String>? {
+        if (known.outcome.result != TrialResult.FAIL) return null
+        val fp = known.outcome.fingerprint ?: return null
+        val hits = staticMatches(fp, known.diagnosis, index)
+        for (f in hits) {
             val files = suspicion.rank(f.files)
             if (files.sorted().joinToString("|") in triedStatic) continue
             return files
